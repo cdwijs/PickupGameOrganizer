@@ -1,0 +1,165 @@
+<mxfile host="Electron">
+  <diagram name="Page-1" id="qBz-YD_CSXRNO-PCWLdo">
+    <mxGraphModel dx="1350" dy="1830" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-25" parent="1" style="whiteSpace=wrap;html=1;aspect=fixed;" value="" vertex="1">
+          <mxGeometry height="570" width="570" x="600" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-21" parent="1" style="whiteSpace=wrap;html=1;aspect=fixed;" value="" vertex="1">
+          <mxGeometry height="570" width="570" x="20" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-1" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Initialize tor" vertex="1">
+          <mxGeometry height="60" width="120" x="240" y="40" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-2" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="100" y="70" as="sourcePoint" />
+            <mxPoint x="240" y="70" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-3" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-2" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="First Boot" vertex="1">
+          <mxGeometry relative="1" x="-0.0143" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-4" edge="1" parent="1" source="_4rYbUekKRrCCtSKPNe2-1" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="310" y="180" as="sourcePoint" />
+            <mxPoint x="510" y="70" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-5" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-4" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Our Tor address" vertex="1">
+          <mxGeometry relative="1" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-6" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="local&lt;div&gt;DB&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="60" x="510" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-7" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="New user" vertex="1">
+          <mxGeometry height="60" width="30" x="60" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-8" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="110" y="160" as="sourcePoint" />
+            <mxPoint x="230" y="160" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-9" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-8" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Request to join network" vertex="1">
+          <mxGeometry relative="1" y="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-10" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="generate QR code" vertex="1">
+          <mxGeometry height="60" width="120" x="240" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-11" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="local&lt;div&gt;DB&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="60" x="50" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-12" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="_4rYbUekKRrCCtSKPNe2-10" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="110" y="249.5" as="sourcePoint" />
+            <mxPoint x="260" y="249.5" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-13" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-12" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Our Tor address" vertex="1">
+          <mxGeometry relative="1" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-14" edge="1" parent="1" style="endArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="360" y="159.5" as="sourcePoint" />
+            <mxPoint x="510" y="160" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-15" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-14" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Our tor address QR" vertex="1">
+          <mxGeometry relative="1" x="-0.0444" y="2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-17" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="read QR code" vertex="1">
+          <mxGeometry height="60" width="120" x="620" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-18" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="Shared DB" vertex="1">
+          <mxGeometry height="80" width="60" x="950" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-19" edge="1" parent="1" source="_4rYbUekKRrCCtSKPNe2-17" style="endArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" target="_4rYbUekKRrCCtSKPNe2-18" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="660" y="270" as="sourcePoint" />
+            <mxPoint x="710" y="220" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-20" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-19" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="New user tor address" vertex="1">
+          <mxGeometry relative="1" x="0.019" y="3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-24" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="New User" vertex="1">
+          <mxGeometry height="30" width="60" x="270" y="-10" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-26" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Existing User" vertex="1">
+          <mxGeometry height="30" width="60" x="830" y="-10" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-27" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Connect to user" vertex="1">
+          <mxGeometry height="60" width="120" x="920" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-28" parent="1" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;" value="Accept connection" vertex="1">
+          <mxGeometry height="60" width="120" x="230" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-29" edge="1" parent="1" source="_4rYbUekKRrCCtSKPNe2-17" style="endArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="_4rYbUekKRrCCtSKPNe2-27" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="780" y="160" as="sourcePoint" />
+            <mxPoint x="990" y="160" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-30" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-29" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="New user tor address" vertex="1">
+          <mxGeometry relative="1" x="0.019" y="3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-31" edge="1" parent="1" source="_4rYbUekKRrCCtSKPNe2-18" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="_4rYbUekKRrCCtSKPNe2-27" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="660" y="220" as="sourcePoint" />
+            <mxPoint x="710" y="170" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-32" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-31" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Existing User Tor address" vertex="1">
+          <mxGeometry relative="1" x="-0.0523" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-35" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" value="Existing user" vertex="1">
+          <mxGeometry height="60" width="30" x="70" y="330" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-36" edge="1" parent="1" source="_4rYbUekKRrCCtSKPNe2-35" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="_4rYbUekKRrCCtSKPNe2-28" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="660" y="340" as="sourcePoint" />
+            <mxPoint x="710" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-37" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-36" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Incoming connection" vertex="1">
+          <mxGeometry relative="1" x="-0.0621" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-38" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="local&lt;div&gt;DB&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="60" x="500" y="320" as="geometry" />
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-39" edge="1" parent="1" source="_4rYbUekKRrCCtSKPNe2-28" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="_4rYbUekKRrCCtSKPNe2-38" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="660" y="340" as="sourcePoint" />
+            <mxPoint x="710" y="290" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="_4rYbUekKRrCCtSKPNe2-40" connectable="0" parent="_4rYbUekKRrCCtSKPNe2-39" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Existing user tor address" vertex="1">
+          <mxGeometry relative="1" x="-0.08" y="-3" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
