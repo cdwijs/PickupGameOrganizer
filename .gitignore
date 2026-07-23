@@ -1,1 +1,9 @@
 tmp/
+
+# prototype-arti: ignore temporary build artifacts under target/, but keep the
+# final release executable so it can be committed/shared.
+/prototype-arti/target/*
+!/prototype-arti/target/release/
+/prototype-arti/target/release/*
+!/prototype-arti/target/release/arti-p2p-prototype
+/prototype-arti/Cargo.lock

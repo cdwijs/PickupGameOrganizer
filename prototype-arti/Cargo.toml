@@ -1,0 +1,36 @@
+[package]
+name = "arti-p2p-prototype"
+version = "0.1.0"
+edition = "2021"
+description = "P2P-over-Tor prototype using Arti onion services with an egui GUI"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+# GUI
+eframe = "0.29"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Tor (Arti) — all arti-family crates pinned in lockstep to 0.37
+arti-client = { version = "0.37", default-features = false, features = [
+    "tokio",
+    "rustls",
+    "onion-service-client",
+    "onion-service-service",
+] }
+tor-rtcompat = { version = "0.37", default-features = false, features = ["tokio", "rustls"] }
+tor-hsservice = { version = "0.37", default-features = false }
+tor-hscrypto = { version = "0.37", default-features = false }
+tor-cell = { version = "0.37", default-features = false }
+
+# .onion address derivation (SHA3-256 checksum per Tor v3 spec)
+sha3 = "0.10"
+
+# Per-profile state/cache directories
+dirs = "5"
+
+[profile.dev]
+# Arti + deps are big; a little opt makes bootstrap noticeably less sluggish.
+opt-level = 1
