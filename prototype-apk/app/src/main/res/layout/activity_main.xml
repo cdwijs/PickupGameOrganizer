@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Layout notes for the "full address must be visible in portrait" requirement:
+  the two address fields are multiline (inputType=textMultiLine), monospace,
+  and match_parent width with NO singleLine / maxLines truncation, so a 62-char
+  .onion address wraps across lines and is always fully readable and selectable.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Arti P2P Prototype"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:paddingBottom="4dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Leave both fields empty and press Connect to host an onion service (fields fill in with this node's address). Paste a peer's onion address or /onion3 multiaddr and press Connect to dial it."
+        android:textSize="12sp"
+        android:paddingBottom="12dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Onion address"
+        android:textStyle="bold"
+        android:textSize="13sp" />
+
+    <EditText
+        android:id="@+id/onionField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="abc…xyz.onion   (empty = host a new one)"
+        android:inputType="textMultiLine|textNoSuggestions"
+        android:fontFamily="monospace"
+        android:textSize="13sp"
+        android:maxLines="8"
+        android:scrollHorizontally="false"
+        android:textIsSelectable="true"
+        android:importantForAutofill="no"
+        android:paddingBottom="8dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="libp2p multiaddr"
+        android:textStyle="bold"
+        android:textSize="13sp" />
+
+    <EditText
+        android:id="@+id/libp2pField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="/onion3/abc…xyz:9999"
+        android:inputType="textMultiLine|textNoSuggestions"
+        android:fontFamily="monospace"
+        android:textSize="13sp"
+        android:maxLines="8"
+        android:scrollHorizontally="false"
+        android:importantForAutofill="no"
+        android:paddingBottom="12dp" />
+
+    <Button
+        android:id="@+id/connectButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Connect" />
+
+    <Button
+        android:id="@+id/counterButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Send increasing number every second" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Status / received data"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:paddingTop="8dp" />
+
+    <ScrollView
+        android:id="@+id/statusScroll"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:background="#11000000">
+
+        <TextView
+            android:id="@+id/statusView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:textIsSelectable="true"
+            android:padding="8dp" />
+    </ScrollView>
+
+</LinearLayout>
