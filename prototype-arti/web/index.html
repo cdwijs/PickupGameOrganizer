@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Arti P2P Prototype — Web</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --border: #d6d9de;
+      --text: #1c1e21;
+      --muted: #5c6470;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --log-bg: #0f1115;
+      --log-text: #d6e0ff;
+      --recv: #7ee787;
+      --err: #ff7b72;
+      --ok: #3fb950;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --log-bg: #0a0c10;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 24px 18px 48px; }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.92rem; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 16px 18px;
+      margin-bottom: 16px;
+    }
+    .panel h2 {
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin: 0 0 12px;
+    }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin: 12px 0 4px; }
+    textarea, input {
+      width: 100%; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.82rem; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+      resize: vertical;
+    }
+    textarea { min-height: 72px; }
+    textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    button {
+      font: inherit; font-size: 0.9rem; padding: 9px 14px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--panel); color: var(--text);
+      cursor: pointer; transition: background 0.12s, opacity 0.12s;
+    }
+    button:hover:not(:disabled) { background: var(--bg); }
+    button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+    button.primary:hover:not(:disabled) { opacity: 0.9; background: var(--accent); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .status-dot {
+      display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+      background: var(--muted); margin-right: 7px; vertical-align: middle;
+    }
+    .status-dot.on { background: var(--ok); }
+    .conn-state { font-size: 0.9rem; color: var(--muted); margin-bottom: 4px; }
+    .steps { font-size: 0.85rem; color: var(--muted); margin: 0 0 8px; padding-left: 18px; }
+    .steps li { margin: 3px 0; }
+    #log {
+      background: var(--log-bg); color: var(--log-text);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.8rem; border-radius: 8px; padding: 12px;
+      height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+    }
+    #log .recv { color: var(--recv); }
+    #log .err { color: var(--err); }
+    .hint { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+    code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Arti P2P Prototype — Web</h1>
+    <p class="sub">
+      Serverless peer-to-peer between two browsers, mirroring the native Arti prototype.
+      Browsers can't run Tor onion services, so this uses a <strong>WebRTC data channel</strong>
+      with manual copy/paste signaling instead of exchanging onion addresses. Works in
+      Firefox, Chromium, and Safari.
+    </p>
+
+    <div class="panel">
+      <h2>Connection</h2>
+      <div class="conn-state"><span id="dot" class="status-dot"></span><span id="connState">Not connected</span></div>
+      <ol class="steps">
+        <li><strong>Host:</strong> press <em>Host (create offer)</em>, then copy the signal and send it to your peer.</li>
+        <li><strong>Joiner:</strong> paste the host's signal below, press <em>Join (create answer)</em>, then send your signal back.</li>
+        <li><strong>Host:</strong> paste the joiner's answer and press <em>Finish connect</em>.</li>
+      </ol>
+
+      <label for="outSignal">Your signal — copy &amp; send to peer</label>
+      <textarea id="outSignal" readonly placeholder="(generated after you Host or Join)"></textarea>
+      <div class="row">
+        <button id="btnHost" class="primary">Host (create offer)</button>
+        <button id="btnCopy" disabled>Copy signal</button>
+      </div>
+
+      <label for="inSignal">Peer's signal — paste here</label>
+      <textarea id="inSignal" placeholder="Paste the offer or answer you received from your peer"></textarea>
+      <div class="row">
+        <button id="btnJoin">Join (create answer)</button>
+        <button id="btnFinish" disabled>Finish connect (apply answer)</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Counter</h2>
+      <p class="hint" style="margin-top:0">
+        Once connected, stream <code>1, 2, 3, …</code> to the peer once per second.
+        Press again to pause; press again to resume where it left off.
+      </p>
+      <div class="row">
+        <button id="btnCounter" disabled>Send increasing number every second</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Status / received data</h2>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    "use strict";
+
+    // --- STUN so peers on different networks can find a route. -------------
+    const RTC_CONFIG = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+
+    // --- DOM ---------------------------------------------------------------
+    const el = (id) => document.getElementById(id);
+    const outSignal = el("outSignal");
+    const inSignal = el("inSignal");
+    const btnHost = el("btnHost");
+    const btnJoin = el("btnJoin");
+    const btnFinish = el("btnFinish");
+    const btnCopy = el("btnCopy");
+    const btnCounter = el("btnCounter");
+    const logBox = el("log");
+    const connState = el("connState");
+    const dot = el("dot");
+
+    // --- State -------------------------------------------------------------
+    let pc = null;          // RTCPeerConnection
+    let channel = null;     // RTCDataChannel
+    let role = null;        // "host" | "joiner"
+    let counterStarted = false;
+    let counterRunning = false;
+    let counterTimer = null;
+    let n = 0;
+
+    // --- Logging -----------------------------------------------------------
+    function log(msg, cls) {
+      const line = document.createElement("div");
+      if (cls) line.className = cls;
+      line.textContent = "• " + msg;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+    function logRecv(v) {
+      const line = document.createElement("div");
+      line.className = "recv";
+      line.textContent = "⟵ received: " + v;
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function setConnected(isConnected) {
+      dot.classList.toggle("on", isConnected);
+      connState.textContent = isConnected ? "Connected" : "Not connected";
+      btnCounter.disabled = !isConnected;
+    }
+
+    // --- WebRTC plumbing ---------------------------------------------------
+
+    // Wait until ICE gathering finishes so the SDP we hand off is complete
+    // (non-trickle signaling — everything travels in one copy/paste blob).
+    function waitForIceComplete(peer) {
+      if (peer.iceGatheringState === "complete") return Promise.resolve();
+      return new Promise((resolve) => {
+        function check() {
+          if (peer.iceGatheringState === "complete") {
+            peer.removeEventListener("icegatheringstatechange", check);
+            resolve();
+          }
+        }
+        peer.addEventListener("icegatheringstatechange", check);
+        // Safari sometimes settles without a final event — poll as a backstop.
+        setTimeout(function poll() {
+          if (peer.iceGatheringState === "complete") resolve();
+          else setTimeout(poll, 250);
+        }, 250);
+      });
+    }
+
+    function newPeerConnection() {
+      const peer = new RTCPeerConnection(RTC_CONFIG);
+      peer.addEventListener("connectionstatechange", () => {
+        const s = peer.connectionState;
+        log("Connection state: " + s);
+        if (s === "connected") setConnected(true);
+        if (s === "failed" || s === "disconnected" || s === "closed") {
+          setConnected(false);
+        }
+      });
+      return peer;
+    }
+
+    function wireChannel(ch) {
+      channel = ch;
+      ch.addEventListener("open", () => {
+        log("Data channel open — you can now send the counter.");
+        setConnected(true);
+      });
+      ch.addEventListener("close", () => {
+        log("Data channel closed.");
+        setConnected(false);
+        stopCounterTimer();
+      });
+      ch.addEventListener("message", (e) => logRecv(e.data));
+    }
+
+    function publishSignal(desc) {
+      outSignal.value = JSON.stringify(desc);
+      btnCopy.disabled = false;
+    }
+
+    // Step 1 (host): create the offer.
+    async function host() {
+      resetPeer();
+      role = "host";
+      pc = newPeerConnection();
+      wireChannel(pc.createDataChannel("counter"));
+      log("Hosting — creating offer…");
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await waitForIceComplete(pc);
+      publishSignal(pc.localDescription);
+      log("Offer ready. Send your signal to the peer, then paste their answer below.");
+      btnFinish.disabled = false;
+      btnHost.disabled = true;
+    }
+
+    // Step 2 (joiner): consume the offer, produce an answer.
+    async function join() {
+      const raw = inSignal.value.trim();
+      if (!raw) return log("Paste the host's signal first.", "err");
+      let offer;
+      try { offer = JSON.parse(raw); }
+      catch { return log("Peer signal is not valid — copy the whole blob.", "err"); }
+      if (offer.type !== "offer") {
+        return log("Expected an offer here. (Are you the host? Use Finish connect instead.)", "err");
+      }
+      resetPeer();
+      role = "joiner";
+      pc = newPeerConnection();
+      pc.addEventListener("datachannel", (e) => wireChannel(e.channel));
+      log("Joining — applying offer and creating answer…");
+      await pc.setRemoteDescription(offer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await waitForIceComplete(pc);
+      publishSignal(pc.localDescription);
+      log("Answer ready. Send your signal back to the host — that's the last step for you.");
+      btnHost.disabled = true;
+      btnJoin.disabled = true;
+    }
+
+    // Step 3 (host): apply the joiner's answer.
+    async function finish() {
+      if (role !== "host" || !pc) return log("Only the host finishes the connection.", "err");
+      const raw = inSignal.value.trim();
+      if (!raw) return log("Paste the peer's answer first.", "err");
+      let answer;
+      try { answer = JSON.parse(raw); }
+      catch { return log("Peer signal is not valid — copy the whole blob.", "err"); }
+      if (answer.type !== "answer") {
+        return log("Expected an answer here (the joiner's signal).", "err");
+      }
+      await pc.setRemoteDescription(answer);
+      log("Answer applied — establishing connection…");
+      btnFinish.disabled = true;
+    }
+
+    function resetPeer() {
+      stopCounterTimer();
+      counterStarted = false;
+      counterRunning = false;
+      n = 0;
+      btnCounter.textContent = "Send increasing number every second";
+      if (channel) { try { channel.close(); } catch (_) {} channel = null; }
+      if (pc) { try { pc.close(); } catch (_) {} pc = null; }
+    }
+
+    // --- Counter (start / pause / resume) ----------------------------------
+    function stopCounterTimer() {
+      if (counterTimer !== null) { clearInterval(counterTimer); counterTimer = null; }
+    }
+
+    function counterTick() {
+      if (!counterRunning) return;           // paused: keep timer, skip sending
+      if (!channel || channel.readyState !== "open") {
+        log("Counter is waiting for a connection…");
+        return;
+      }
+      n += 1;
+      try {
+        channel.send(String(n));
+        log("Sent: " + n);
+      } catch (e) {
+        log("Send failed: " + e.message, "err");
+      }
+    }
+
+    function toggleCounter() {
+      if (!counterStarted) {
+        counterStarted = true;
+        counterRunning = true;
+        n = 0;
+        log("Counter started — sending an increasing number every second.");
+        counterTimer = setInterval(counterTick, 1000);
+      } else {
+        counterRunning = !counterRunning;
+        log(counterRunning ? "Counter resumed." : "Counter paused.");
+      }
+      btnCounter.textContent = !counterStarted
+        ? "Send increasing number every second"
+        : counterRunning ? "Pause counting" : "Resume counting";
+    }
+
+    // --- Wire up UI --------------------------------------------------------
+    btnHost.addEventListener("click", () => host().catch((e) => log("Host error: " + e.message, "err")));
+    btnJoin.addEventListener("click", () => join().catch((e) => log("Join error: " + e.message, "err")));
+    btnFinish.addEventListener("click", () => finish().catch((e) => log("Finish error: " + e.message, "err")));
+    btnCounter.addEventListener("click", toggleCounter);
+    btnCopy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(outSignal.value);
+        log("Signal copied to clipboard.");
+      } catch {
+        outSignal.select();
+        log("Clipboard blocked — select the field and copy manually.", "err");
+      }
+    });
+
+    log("Ready. Host a connection or join a peer to begin.");
+  })();
+  </script>
+</body>
+</html>

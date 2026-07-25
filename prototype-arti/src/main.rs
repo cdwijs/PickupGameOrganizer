@@ -17,6 +17,7 @@
 //! not for sensitive production traffic.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc as std_mpsc;
 use std::time::Duration;
 
@@ -52,7 +53,8 @@ type SharedWriter = Arc<AsyncMutex<Option<WriteHalf<DataStream>>>>;
 /// UI -> backend commands.
 enum Command {
     Connect { onion: String, libp2p: String },
-    StartCounter,
+    /// Start counting on first press; pause/resume on subsequent presses.
+    ToggleCounter,
 }
 
 /// Backend -> UI events.
@@ -198,6 +200,8 @@ fn normalize_target(onion: &str, libp2p: &str) -> String {
 async fn backend_main(mut cmd_rx: tmpsc::UnboundedReceiver<Command>, emit: Emitter) {
     let writer: SharedWriter = Arc::new(AsyncMutex::new(None));
     let mut counter_started = false;
+    // Shared pause flag: the counter loop checks this each tick.
+    let counter_paused = Arc::new(AtomicBool::new(false));
 
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
@@ -213,15 +217,25 @@ async fn backend_main(mut cmd_rx: tmpsc::UnboundedReceiver<Command>, emit: Emitt
                     }
                 });
             }
-            Command::StartCounter => {
-                if counter_started {
-                    emit.log("Counter already running.");
-                    continue;
+            Command::ToggleCounter => {
+                if !counter_started {
+                    // First press: start counting.
+                    counter_started = true;
+                    counter_paused.store(false, Ordering::SeqCst);
+                    let emit = emit.clone();
+                    let writer = writer.clone();
+                    let paused = counter_paused.clone();
+                    tokio::spawn(async move { counter_loop(emit, writer, paused).await });
+                } else {
+                    // Subsequent presses: pause / resume.
+                    let now_paused = !counter_paused.load(Ordering::SeqCst);
+                    counter_paused.store(now_paused, Ordering::SeqCst);
+                    if now_paused {
+                        emit.log("Counter paused.");
+                    } else {
+                        emit.log("Counter resumed.");
+                    }
                 }
-                counter_started = true;
-                let emit = emit.clone();
-                let writer = writer.clone();
-                tokio::spawn(async move { counter_loop(emit, writer).await });
             }
         }
     }
@@ -355,13 +369,17 @@ async fn reader_loop(mut read_half: ReadHalf<DataStream>, emit: Emitter) {
 }
 
 /// Send an increasing number once per second on the active connection.
-async fn counter_loop(emit: Emitter, writer: SharedWriter) {
+async fn counter_loop(emit: Emitter, writer: SharedWriter, paused: Arc<AtomicBool>) {
     emit.log("Counter started — sending an increasing number every second.");
     let mut n: u64 = 0;
     let mut warned_idle = false;
     let mut ticker = tokio::time::interval(Duration::from_secs(1));
     loop {
         ticker.tick().await;
+        // Paused: keep ticking but don't send, so `n` resumes where it left off.
+        if paused.load(Ordering::SeqCst) {
+            continue;
+        }
         let mut guard = writer.lock().await;
         let Some(w) = guard.as_mut() else {
             if !warned_idle {
@@ -395,6 +413,10 @@ struct App {
     status_log: String,
     cmd_tx: tmpsc::UnboundedSender<Command>,
     evt_rx: std_mpsc::Receiver<UiEvent>,
+    /// Whether the counter has been started at least once.
+    counter_started: bool,
+    /// Whether the counter is currently sending (vs. paused).
+    counter_running: bool,
 }
 
 impl App {
@@ -455,8 +477,17 @@ impl eframe::App for App {
                         libp2p: self.libp2p_input.clone(),
                     });
                 }
-                if ui.button("Send increasing number every second").clicked() {
-                    let _ = self.cmd_tx.send(Command::StartCounter);
+                let counter_label = if !self.counter_started {
+                    "Send increasing number every second"
+                } else if self.counter_running {
+                    "Pause counting"
+                } else {
+                    "Resume counting"
+                };
+                if ui.button(counter_label).clicked() {
+                    self.counter_started = true;
+                    self.counter_running = !self.counter_running;
+                    let _ = self.cmd_tx.send(Command::ToggleCounter);
                 }
             });
 
@@ -512,6 +543,8 @@ fn main() -> eframe::Result<()> {
                 status_log: String::new(),
                 cmd_tx,
                 evt_rx,
+                counter_started: false,
+                counter_running: false,
             }))
         }),
     )

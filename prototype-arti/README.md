@@ -23,6 +23,13 @@ address" field is purely the dialable multiaddr form of the onion address.
 > ⚠️ Arti onion services are officially **experimental** — fine for a prototype,
 > not for sensitive production traffic.
 
+## Web version
+
+A browser port of this demo lives in [`web/`](web/) — same connect + counter
+(start/pause/resume) flow, but over a **WebRTC data channel** with copy/paste
+signaling instead of Tor (browsers can't run onion services). Works in Firefox,
+Chromium, and Safari. See [`web/README.md`](web/README.md).
+
 ## Build & run
 
 Requires a Rust toolchain and (for the GUI) system libraries — see
