@@ -627,7 +627,7 @@
         <mxCell id="Cs45KlYoh7ihOym3qzTf-193" parent="Cs45KlYoh7ihOym3qzTf-192" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="location exact" vertex="1">
           <mxGeometry height="30" width="310" y="60" as="geometry" />
         </mxCell>
-        <mxCell id="Cs45KlYoh7ihOym3qzTf-231" parent="Cs45KlYoh7ihOym3qzTf-192" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="player[]" vertex="1">
+        <mxCell id="Cs45KlYoh7ihOym3qzTf-231" parent="Cs45KlYoh7ihOym3qzTf-192" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="player[] (member can add and remove themselves, not anybody else)" vertex="1">
           <mxGeometry height="30" width="310" y="90" as="geometry" />
         </mxCell>
         <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-15" parent="Cs45KlYoh7ihOym3qzTf-192" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;" value="cost" vertex="1">
@@ -1049,7 +1049,7 @@
           <mxGeometry height="30" width="140" y="120" as="geometry" />
         </mxCell>
         <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-49" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Howto let data dissapear after a certain time?&lt;div&gt;&lt;br&gt;&lt;/div&gt;" vertex="1">
-          <mxGeometry height="40" width="220" x="1590" y="-1060" as="geometry" />
+          <mxGeometry height="40" width="220" x="130" y="-970" as="geometry" />
         </mxCell>
         <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-50" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Removal of group requires unanimous vote of all admins&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;(An inactive admin can block removal of the group)&lt;/div&gt;" vertex="1">
           <mxGeometry height="50" width="360" x="2020" y="-910" as="geometry" />
@@ -1101,6 +1101,24 @@
           <mxGeometry relative="1" x="-0.3291" as="geometry">
             <mxPoint y="41" as="offset" />
           </mxGeometry>
+        </mxCell>
+        <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-73" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Write access key" vertex="1">
+          <mxGeometry height="30" width="110" x="360" y="-1070" as="geometry" />
+        </mxCell>
+        <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-74" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Read access key" vertex="1">
+          <mxGeometry height="20" width="110" x="360" y="-1020" as="geometry" />
+        </mxCell>
+        <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-75" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Key expiring" vertex="1">
+          <mxGeometry height="10" width="100" x="360" y="-970" as="geometry" />
+        </mxCell>
+        <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-76" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="=correctly signing things" vertex="1">
+          <mxGeometry height="30" width="60" x="480" y="-1080" as="geometry" />
+        </mxCell>
+        <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-77" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="=correctly decrypt things" vertex="1">
+          <mxGeometry height="30" width="60" x="480" y="-1025" as="geometry" />
+        </mxCell>
+        <mxCell id="nx9Qj4Xa0HHLW7jD4z0X-78" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="=deleting key after some time" vertex="1">
+          <mxGeometry height="30" width="60" x="480" y="-970" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
