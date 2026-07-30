@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Encrypted Userdata Prototype</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --border: #d6d9de;
+      --text: #1c1e21;
+      --muted: #5c6470;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --ok: #3fb950;
+      --err: #ff7b72;
+      --server-bg: #eef4ff;
+      --server-border: #b7c7ef;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --server-bg: #182238;
+        --server-border: #2a3d63;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    .wrap { max-width: 820px; margin: 0 auto; padding: 24px 18px 48px; }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; }
+    h2.section {
+      font-size: 1.05rem; margin: 24px 0 10px; padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.92rem; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px 16px;
+      margin-bottom: 12px;
+    }
+    .panel.server {
+      background: var(--server-bg);
+      border-color: var(--server-border);
+    }
+    .panel h3 {
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); margin: 0 0 8px;
+    }
+    .formula {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.82rem; color: var(--muted); margin: 0 0 8px;
+    }
+    label { display: block; font-size: 0.78rem; color: var(--muted); margin: 10px 0 4px; }
+    textarea, input {
+      width: 100%; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.82rem; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg); color: var(--text);
+      resize: vertical;
+    }
+    textarea { min-height: 54px; }
+    input[readonly], textarea[readonly] { color: var(--muted); }
+    textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+    button {
+      font: inherit; font-size: 0.88rem; padding: 8px 13px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--panel); color: var(--text);
+      cursor: pointer; transition: background 0.12s, opacity 0.12s;
+    }
+    button:hover:not(:disabled) { background: var(--bg); }
+    button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
+    button.primary:hover:not(:disabled) { opacity: 0.9; background: var(--accent); }
+    button.danger { color: var(--err); border-color: var(--err); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hint { font-size: 0.78rem; color: var(--muted); margin: 6px 0 0; }
+    .status { font-size: 0.82rem; margin-left: 6px; }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--err); }
+    .status.busy { color: var(--accent); }
+    code { background: var(--bg); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Encrypted Userdata Prototype</h1>
+    <p class="sub">
+      Interactive walkthrough of password-derived envelope encryption.
+      Each step has its own <em>Calculate</em> button and shows its intermediate value.
+      All fields are editable and autosaved to <code>localStorage</code>; they reload on refresh.
+    </p>
+
+    <div class="toolbar">
+      <button id="btnResetDefaults">Reset to defaults</button>
+      <button id="btnClearStorage" class="danger">Clear localStorage</button>
+      <span class="hint" id="argonHint"></span>
+    </div>
+
+    <h2 class="section">Account creation</h2>
+
+    <div class="panel">
+      <h3>1. Master password</h3>
+      <p class="formula">password (UTF-8 string)</p>
+      <input type="text" id="createPassword" spellcheck="false" />
+    </div>
+
+    <div class="panel">
+      <h3>2. Salt</h3>
+      <p class="formula">salt = random(16)   (hex)</p>
+      <input type="text" id="createSalt" spellcheck="false" placeholder="(press Calculate to generate)" />
+      <div class="row">
+        <button id="btnCalcSalt" class="primary">Calculate — random 16 bytes</button>
+        <span id="statCalcSalt" class="status"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>3. KEK — Key Encryption Key</h3>
+      <p class="formula">KEK = Argon2id(password, salt)   (32 bytes, hex)</p>
+      <input type="text" id="createKEK" spellcheck="false" placeholder="(derived from password + salt)" />
+      <div class="row">
+        <button id="btnCalcKEK" class="primary">Calculate — derive KEK</button>
+        <span id="statCalcKEK" class="status"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>4. DEK — Data Encryption Key</h3>
+      <p class="formula">DEK = random(32)   (hex)</p>
+      <input type="text" id="createDEK" spellcheck="false" placeholder="(press Calculate to generate)" />
+      <div class="row">
+        <button id="btnCalcDEK" class="primary">Calculate — random 32 bytes</button>
+        <span id="statCalcDEK" class="status"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>5. wrapped_DEK</h3>
+      <p class="formula">wrapped_DEK = AES-GCM(KEK, DEK)   (nonce ‖ ciphertext ‖ tag, hex)</p>
+      <input type="text" id="createWrappedDEK" spellcheck="false" placeholder="(encrypt DEK with KEK)" />
+      <div class="row">
+        <button id="btnCalcWrappedDEK" class="primary">Calculate — wrap DEK</button>
+        <span id="statCalcWrappedDEK" class="status"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>6. blob</h3>
+      <p class="formula">blob = AES-GCM(DEK, plaintext)   (nonce ‖ ciphertext ‖ tag, hex)</p>
+      <label for="createPlaintext">Plaintext (UTF-8)</label>
+      <textarea id="createPlaintext" spellcheck="false"></textarea>
+      <label for="createBlob">blob</label>
+      <input type="text" id="createBlob" spellcheck="false" placeholder="(encrypt plaintext with DEK)" />
+      <div class="row">
+        <button id="btnCalcBlob" class="primary">Calculate — encrypt blob</button>
+        <span id="statCalcBlob" class="status"></span>
+      </div>
+    </div>
+
+    <div class="panel server">
+      <h3>Server storage — { salt, wrapped_DEK, blob }</h3>
+      <p class="hint" style="margin-top:0">
+        These are the only three items the server keeps. No password, no KEK, no DEK.
+        Pushing populates the decryption section below; you can also edit the fields directly to simulate a tampered or wrong-user record.
+      </p>
+      <label for="serverSalt">salt</label>
+      <input type="text" id="serverSalt" spellcheck="false" />
+      <label for="serverWrappedDEK">wrapped_DEK</label>
+      <input type="text" id="serverWrappedDEK" spellcheck="false" />
+      <label for="serverBlob">blob</label>
+      <input type="text" id="serverBlob" spellcheck="false" />
+      <div class="row">
+        <button id="btnPushServer" class="primary">Push salt / wrapped_DEK / blob to server</button>
+        <button id="btnFetchServer">Fetch into decryption section ↓</button>
+        <span id="statServer" class="status"></span>
+      </div>
+    </div>
+
+    <h2 class="section">Decryption (login)</h2>
+
+    <div class="panel">
+      <h3>D0. Fetched from server</h3>
+      <p class="formula">fetch(salt, wrapped_DEK, blob)</p>
+      <label for="decryptSalt">salt</label>
+      <input type="text" id="decryptSalt" spellcheck="false" />
+      <label for="decryptWrappedDEK">wrapped_DEK</label>
+      <input type="text" id="decryptWrappedDEK" spellcheck="false" />
+      <label for="decryptBlob">blob</label>
+      <input type="text" id="decryptBlob" spellcheck="false" />
+    </div>
+
+    <div class="panel">
+      <h3>D1. Entered password</h3>
+      <p class="formula">entered_password (UTF-8 string)</p>
+      <input type="text" id="decryptPassword" spellcheck="false" />
+      <p class="hint">Change a single character to see the decryption fail at step D3 with an authentication error.</p>
+    </div>
+
+    <div class="panel">
+      <h3>D2. KEK</h3>
+      <p class="formula">KEK = Argon2id(entered_password, salt)</p>
+      <input type="text" id="decryptKEK" spellcheck="false" placeholder="(derived from entered password + fetched salt)" />
+      <div class="row">
+        <button id="btnDecryptKEK" class="primary">Calculate — derive KEK</button>
+        <span id="statDecryptKEK" class="status"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>D3. DEK (unwrap)</h3>
+      <p class="formula">DEK = AES-GCM-decrypt(KEK, wrapped_DEK)   — fails if password is wrong</p>
+      <input type="text" id="decryptDEK" spellcheck="false" placeholder="(unwrap wrapped_DEK with KEK)" />
+      <div class="row">
+        <button id="btnDecryptDEK" class="primary">Calculate — unwrap DEK</button>
+        <span id="statDecryptDEK" class="status"></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>D4. Plaintext</h3>
+      <p class="formula">data = AES-GCM-decrypt(DEK, blob)</p>
+      <textarea id="decryptPlaintext" spellcheck="false" placeholder="(decrypt blob with DEK)"></textarea>
+      <div class="row">
+        <button id="btnDecryptBlob" class="primary">Calculate — decrypt blob</button>
+        <span id="statDecryptBlob" class="status"></span>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/hash-wasm@4.11.0/dist/index.umd.min.js"></script>
+  <script>
+  (function () {
+    "use strict";
+
+    // ------------------------------------------------------------ config
+
+    const STORAGE_KEY = "prototype-encrypted-userdata:v1";
+
+    // Argon2id parameters. Modest for browser responsiveness — a real client
+    // should pick higher memory (OWASP suggests m=19 MiB, t=2 as a minimum;
+    // password managers use hundreds of MiB).
+    const ARGON2 = {
+      parallelism: 1,
+      iterations: 2,
+      memorySize: 19 * 1024, // KiB → 19 MiB
+      hashLength: 32,
+    };
+
+    const DEFAULTS = {
+      createPassword: "correct horse battery staple",
+      createPlaintext: "my secrets",
+      decryptPassword: "correct horse battery staple",
+      createSalt: "", createKEK: "", createDEK: "",
+      createWrappedDEK: "", createBlob: "",
+      serverSalt: "", serverWrappedDEK: "", serverBlob: "",
+      decryptSalt: "", decryptWrappedDEK: "", decryptBlob: "",
+      decryptKEK: "", decryptDEK: "", decryptPlaintext: "",
+    };
+
+    const FIELD_IDS = Object.keys(DEFAULTS);
+
+    // ------------------------------------------------------------ dom helpers
+
+    const el = (id) => document.getElementById(id);
+
+    function setStatus(id, msg, kind) {
+      const s = el(id);
+      if (!s) return;
+      s.textContent = msg || "";
+      s.className = "status" + (kind ? " " + kind : "");
+    }
+
+    // ------------------------------------------------------------ hex / bytes
+
+    function bytesToHex(bytes) {
+      let s = "";
+      for (let i = 0; i < bytes.length; i++) s += bytes[i].toString(16).padStart(2, "0");
+      return s;
+    }
+    function hexToBytes(hex) {
+      const clean = String(hex).trim().replace(/^0x/i, "").replace(/\s+/g, "");
+      if (clean.length === 0) throw new Error("hex string is empty");
+      if (clean.length % 2) throw new Error("hex string has odd length");
+      if (!/^[0-9a-f]+$/i.test(clean)) throw new Error("hex string has non-hex characters");
+      const out = new Uint8Array(clean.length / 2);
+      for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
+      return out;
+    }
+    const enc = new TextEncoder();
+    const dec = new TextDecoder();
+
+    // ------------------------------------------------------------ crypto
+
+    async function argon2idKEK(passwordUtf8, saltBytes) {
+      if (!window.hashwasm || !window.hashwasm.argon2id) {
+        throw new Error("hash-wasm not loaded (offline?)");
+      }
+      // hash-wasm accepts Uint8Array for password and salt.
+      const out = await window.hashwasm.argon2id({
+        password: enc.encode(passwordUtf8),
+        salt: saltBytes,
+        parallelism: ARGON2.parallelism,
+        iterations: ARGON2.iterations,
+        memorySize: ARGON2.memorySize,
+        hashLength: ARGON2.hashLength,
+        outputType: "binary",
+      });
+      return out; // Uint8Array(32)
+    }
+
+    async function aesGcmEncrypt(keyBytes, plaintextBytes) {
+      const key = await crypto.subtle.importKey(
+        "raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"]
+      );
+      const nonce = crypto.getRandomValues(new Uint8Array(12));
+      const ct = new Uint8Array(
+        await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, plaintextBytes)
+      );
+      // Envelope on the wire: nonce ‖ ciphertext-with-tag.
+      const out = new Uint8Array(nonce.length + ct.length);
+      out.set(nonce, 0);
+      out.set(ct, nonce.length);
+      return out;
+    }
+
+    async function aesGcmDecrypt(keyBytes, envelopeBytes) {
+      if (envelopeBytes.length < 12 + 16) {
+        throw new Error("envelope too short (need at least 12-byte nonce + 16-byte tag)");
+      }
+      const key = await crypto.subtle.importKey(
+        "raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"]
+      );
+      const nonce = envelopeBytes.slice(0, 12);
+      const ct = envelopeBytes.slice(12);
+      const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: nonce }, key, ct);
+      return new Uint8Array(pt);
+    }
+
+    // ------------------------------------------------------------ persistence
+
+    function saveAll() {
+      const state = {};
+      for (const id of FIELD_IDS) {
+        const node = el(id);
+        if (node) state[id] = node.value;
+      }
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      catch (_) { /* private mode / quota */ }
+    }
+
+    function loadAll() {
+      let state = null;
+      try { state = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); }
+      catch (_) { state = null; }
+      for (const id of FIELD_IDS) {
+        const node = el(id);
+        if (!node) continue;
+        const val = (state && id in state) ? state[id] : DEFAULTS[id];
+        node.value = val;
+      }
+    }
+
+    function resetDefaults() {
+      for (const id of FIELD_IDS) {
+        const node = el(id); if (node) node.value = DEFAULTS[id];
+      }
+      saveAll();
+      clearAllStatuses();
+    }
+
+    function clearStorage() {
+      try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+      resetDefaults();
+    }
+
+    function clearAllStatuses() {
+      document.querySelectorAll(".status").forEach((s) => {
+        s.textContent = ""; s.className = "status";
+      });
+    }
+
+    // ------------------------------------------------------------ steps
+
+    async function calcSalt() {
+      setStatus("statCalcSalt", "generating…", "busy");
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      el("createSalt").value = bytesToHex(salt);
+      saveAll();
+      setStatus("statCalcSalt", "ok (16 bytes)", "ok");
+    }
+
+    async function calcKEK() {
+      setStatus("statCalcKEK", "deriving with Argon2id (this takes a moment)…", "busy");
+      try {
+        const password = el("createPassword").value;
+        const salt = hexToBytes(el("createSalt").value);
+        const t0 = performance.now();
+        const kek = await argon2idKEK(password, salt);
+        const dt = (performance.now() - t0).toFixed(0);
+        el("createKEK").value = bytesToHex(kek);
+        saveAll();
+        setStatus("statCalcKEK", `ok (32 bytes, ${dt} ms)`, "ok");
+      } catch (e) {
+        setStatus("statCalcKEK", "error: " + e.message, "err");
+      }
+    }
+
+    async function calcDEK() {
+      setStatus("statCalcDEK", "generating…", "busy");
+      const dek = crypto.getRandomValues(new Uint8Array(32));
+      el("createDEK").value = bytesToHex(dek);
+      saveAll();
+      setStatus("statCalcDEK", "ok (32 bytes)", "ok");
+    }
+
+    async function calcWrappedDEK() {
+      setStatus("statCalcWrappedDEK", "encrypting…", "busy");
+      try {
+        const kek = hexToBytes(el("createKEK").value);
+        const dek = hexToBytes(el("createDEK").value);
+        if (kek.length !== 32) throw new Error("KEK must be 32 bytes");
+        if (dek.length !== 32) throw new Error("DEK must be 32 bytes");
+        const env = await aesGcmEncrypt(kek, dek);
+        el("createWrappedDEK").value = bytesToHex(env);
+        saveAll();
+        setStatus("statCalcWrappedDEK", `ok (${env.length} bytes)`, "ok");
+      } catch (e) {
+        setStatus("statCalcWrappedDEK", "error: " + e.message, "err");
+      }
+    }
+
+    async function calcBlob() {
+      setStatus("statCalcBlob", "encrypting…", "busy");
+      try {
+        const dek = hexToBytes(el("createDEK").value);
+        if (dek.length !== 32) throw new Error("DEK must be 32 bytes");
+        const pt = enc.encode(el("createPlaintext").value);
+        const env = await aesGcmEncrypt(dek, pt);
+        el("createBlob").value = bytesToHex(env);
+        saveAll();
+        setStatus("statCalcBlob", `ok (${env.length} bytes)`, "ok");
+      } catch (e) {
+        setStatus("statCalcBlob", "error: " + e.message, "err");
+      }
+    }
+
+    function pushServer() {
+      el("serverSalt").value = el("createSalt").value;
+      el("serverWrappedDEK").value = el("createWrappedDEK").value;
+      el("serverBlob").value = el("createBlob").value;
+      saveAll();
+      setStatus("statServer", "pushed 3 fields to server", "ok");
+    }
+
+    function fetchServer() {
+      el("decryptSalt").value = el("serverSalt").value;
+      el("decryptWrappedDEK").value = el("serverWrappedDEK").value;
+      el("decryptBlob").value = el("serverBlob").value;
+      saveAll();
+      setStatus("statServer", "fetched into decryption section", "ok");
+    }
+
+    async function decryptKEK() {
+      setStatus("statDecryptKEK", "deriving with Argon2id…", "busy");
+      try {
+        const password = el("decryptPassword").value;
+        const salt = hexToBytes(el("decryptSalt").value);
+        const t0 = performance.now();
+        const kek = await argon2idKEK(password, salt);
+        const dt = (performance.now() - t0).toFixed(0);
+        el("decryptKEK").value = bytesToHex(kek);
+        saveAll();
+        setStatus("statDecryptKEK", `ok (32 bytes, ${dt} ms)`, "ok");
+      } catch (e) {
+        setStatus("statDecryptKEK", "error: " + e.message, "err");
+      }
+    }
+
+    async function decryptDEK() {
+      setStatus("statDecryptDEK", "unwrapping…", "busy");
+      try {
+        const kek = hexToBytes(el("decryptKEK").value);
+        const env = hexToBytes(el("decryptWrappedDEK").value);
+        if (kek.length !== 32) throw new Error("KEK must be 32 bytes");
+        const dek = await aesGcmDecrypt(kek, env);
+        el("decryptDEK").value = bytesToHex(dek);
+        saveAll();
+        setStatus("statDecryptDEK", `ok (${dek.length} bytes)`, "ok");
+      } catch (e) {
+        // AES-GCM auth failures surface as OperationError with an empty message.
+        const msg = e.message || "authentication failed (wrong password or tampered wrapped_DEK)";
+        setStatus("statDecryptDEK", "error: " + msg, "err");
+      }
+    }
+
+    async function decryptBlob() {
+      setStatus("statDecryptBlob", "decrypting…", "busy");
+      try {
+        const dek = hexToBytes(el("decryptDEK").value);
+        const env = hexToBytes(el("decryptBlob").value);
+        if (dek.length !== 32) throw new Error("DEK must be 32 bytes");
+        const pt = await aesGcmDecrypt(dek, env);
+        el("decryptPlaintext").value = dec.decode(pt);
+        saveAll();
+        setStatus("statDecryptBlob", `ok (${pt.length} bytes)`, "ok");
+      } catch (e) {
+        const msg = e.message || "authentication failed (wrong DEK or tampered blob)";
+        setStatus("statDecryptBlob", "error: " + msg, "err");
+      }
+    }
+
+    // ------------------------------------------------------------ wire up
+
+    function attachAutosave() {
+      for (const id of FIELD_IDS) {
+        const node = el(id);
+        if (node) node.addEventListener("input", saveAll);
+      }
+    }
+
+    function wire() {
+      el("btnCalcSalt").addEventListener("click", () => calcSalt());
+      el("btnCalcKEK").addEventListener("click", () => calcKEK());
+      el("btnCalcDEK").addEventListener("click", () => calcDEK());
+      el("btnCalcWrappedDEK").addEventListener("click", () => calcWrappedDEK());
+      el("btnCalcBlob").addEventListener("click", () => calcBlob());
+      el("btnPushServer").addEventListener("click", pushServer);
+      el("btnFetchServer").addEventListener("click", fetchServer);
+      el("btnDecryptKEK").addEventListener("click", () => decryptKEK());
+      el("btnDecryptDEK").addEventListener("click", () => decryptDEK());
+      el("btnDecryptBlob").addEventListener("click", () => decryptBlob());
+      el("btnResetDefaults").addEventListener("click", resetDefaults);
+      el("btnClearStorage").addEventListener("click", clearStorage);
+    }
+
+    // ------------------------------------------------------------ boot
+
+    loadAll();
+    attachAutosave();
+    wire();
+    el("argonHint").textContent =
+      `Argon2id params: m=${ARGON2.memorySize} KiB, t=${ARGON2.iterations}, p=${ARGON2.parallelism}, out=${ARGON2.hashLength} B`;
+  })();
+  </script>
+</body>
+</html>
