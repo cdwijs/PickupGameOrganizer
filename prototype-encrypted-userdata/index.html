@@ -106,8 +106,10 @@
     <div class="toolbar">
       <button id="btnResetDefaults">Reset to defaults</button>
       <button id="btnClearStorage" class="danger">Clear localStorage</button>
-      <span class="hint" id="argonHint"></span>
+      <button id="btnClearEngineCache">Clear cached Argon2id engine</button>
     </div>
+    <p class="hint" id="argonHint" style="margin: 0 0 4px;"></p>
+    <p class="hint"><span id="hashwasmStatus" class="status busy">Loading Argon2id engine…</span></p>
 
     <h2 class="section">Account creation</h2>
 
@@ -240,7 +242,6 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/hash-wasm@4.11.0/dist/index.umd.min.js"></script>
   <script>
   (function () {
     "use strict";
@@ -248,6 +249,14 @@
     // ------------------------------------------------------------ config
 
     const STORAGE_KEY = "prototype-encrypted-userdata:v1";
+
+    // hash-wasm is fetched from the CDN on the very first run and then cached
+    // in localStorage under this key. Every subsequent load reads it from the
+    // cache — no network required. Bump the version-tag suffix if you want to
+    // force a re-fetch after upgrading.
+    const HASHWASM_URL =
+      "https://cdn.jsdelivr.net/npm/hash-wasm@4.11.0/dist/index.umd.min.js";
+    const HASHWASM_CACHE_KEY = "prototype-encrypted-userdata:hashwasm:v4.11.0";
 
     // Argon2id parameters. Modest for browser responsiveness — a real client
     // should pick higher memory (OWASP suggests m=19 MiB, t=2 as a minimum;
@@ -302,11 +311,60 @@
     const enc = new TextEncoder();
     const dec = new TextDecoder();
 
+    // ------------------------------------------------------------ hash-wasm loader
+
+    // Resolves once `window.hashwasm.argon2id` is available. On first run this
+    // fetches ~210 KB from the CDN and stores the JS source in localStorage;
+    // every subsequent run reads that cached source. Any code that needs
+    // Argon2id must `await` this promise before calling it.
+    const hashWasmReady = (async () => {
+      let src = null;
+      try { src = localStorage.getItem(HASHWASM_CACHE_KEY); } catch (_) {}
+
+      if (src) {
+        setHashWasmStatus("Argon2id engine loaded from local cache.", "ok");
+      } else {
+        setHashWasmStatus("First run — downloading Argon2id engine…", "busy");
+        try {
+          const res = await fetch(HASHWASM_URL);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          src = await res.text();
+        } catch (e) {
+          setHashWasmStatus(
+            "Failed to download Argon2id engine (" + (e.message || e) +
+            "). Connect to the internet and reload.", "err");
+          throw e;
+        }
+        try { localStorage.setItem(HASHWASM_CACHE_KEY, src); }
+        catch (_) { /* quota / private mode — engine still usable this session */ }
+        setHashWasmStatus(
+          `Argon2id engine downloaded (${(src.length / 1024).toFixed(0)} KB) and cached for offline use.`,
+          "ok");
+      }
+
+      // Execute the fetched/cached source. An inline text <script> runs
+      // synchronously when appended, so `window.hashwasm` is set immediately.
+      const s = document.createElement("script");
+      s.textContent = src;
+      document.head.appendChild(s);
+      if (!window.hashwasm || !window.hashwasm.argon2id) {
+        throw new Error("hash-wasm source did not expose argon2id — cache may be corrupt");
+      }
+    })();
+
+    function setHashWasmStatus(msg, kind) {
+      const s = document.getElementById("hashwasmStatus");
+      if (!s) return;
+      s.textContent = msg;
+      s.className = "status" + (kind ? " " + kind : "");
+    }
+
     // ------------------------------------------------------------ crypto
 
     async function argon2idKEK(passwordUtf8, saltBytes) {
+      await hashWasmReady;
       if (!window.hashwasm || !window.hashwasm.argon2id) {
-        throw new Error("hash-wasm not loaded (offline?)");
+        throw new Error("Argon2id engine unavailable");
       }
       // hash-wasm accepts Uint8Array for password and salt.
       const out = await window.hashwasm.argon2id({
@@ -544,6 +602,14 @@
       el("btnDecryptBlob").addEventListener("click", () => decryptBlob());
       el("btnResetDefaults").addEventListener("click", resetDefaults);
       el("btnClearStorage").addEventListener("click", clearStorage);
+      el("btnClearEngineCache").addEventListener("click", clearEngineCache);
+    }
+
+    function clearEngineCache() {
+      try { localStorage.removeItem(HASHWASM_CACHE_KEY); } catch (_) {}
+      setHashWasmStatus(
+        "Cached Argon2id engine cleared. Reload the page to re-download.",
+        "ok");
     }
 
     // ------------------------------------------------------------ boot

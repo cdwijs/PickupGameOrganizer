@@ -11,8 +11,14 @@ and by cloud KMS envelope-encryption schemes.
 ## Run
 
 Open `index.html` in a modern browser. Chromium, Firefox, and Safari all work.
-No build step. First load fetches `hash-wasm` from a CDN (~200 KB) for Argon2id;
-after that the page can be used offline until the cache expires.
+No build step.
+
+**First run** the page downloads `hash-wasm` (~210 KB, Argon2id + inlined
+WebAssembly) from a CDN and stores the source in `localStorage`. **Every
+subsequent run** loads it straight from that cache — no network needed.
+A status line under the toolbar reports whether the engine was loaded from
+cache or downloaded, and there's a *Clear cached Argon2id engine* button
+to force a re-download.
 
 ## What the page does
 
@@ -76,3 +82,9 @@ inline script in `index.html`.
 ## Files
 
 - `index.html` — the entire prototype (HTML + CSS + JS in one file).
+
+`hash-wasm` itself is not vendored — it's fetched from
+`https://cdn.jsdelivr.net/npm/hash-wasm@4.11.0/dist/index.umd.min.js` on the
+first run and cached under the localStorage key
+`prototype-encrypted-userdata:hashwasm:v4.11.0`. To pin a different version,
+edit `HASHWASM_URL` and `HASHWASM_CACHE_KEY` at the top of the inline script.
