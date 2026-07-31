@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IPFS ↔ IndexedDB Prototype</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <meta name="theme-color" content="#3b6ef0" />
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --border: #d6d9de;
+      --text: #1c1e21;
+      --muted: #5c6470;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --ok: #2d9c4a;
+      --err: #d73a49;
+      --warn: #b58900;
+      --code-bg: #f0f2f5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --ok: #3fb950;
+        --err: #ff7b72;
+        --warn: #e3b341;
+        --code-bg: #23272f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    header { max-width: 1400px; margin: 0 auto 16px; }
+    header h1 { margin: 0 0 4px; font-size: 20px; }
+    header p { margin: 0; color: var(--muted); }
+    .grid {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 16px;
+    }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+    }
+    section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    section h2 .pill { margin-left: auto; }
+    section h2 .pill + .pill { margin-left: 0; }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 8px 0 3px;
+    }
+    button {
+      display: inline-block;
+      padding: 6px 12px;
+      margin: 4px 4px 4px 0;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: var(--accent-text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--panel); color: var(--text); }
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--code-bg);
+      color: var(--text);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      resize: vertical;
+    }
+    textarea { min-height: 60px; }
+    #log { min-height: 200px; height: 320px; font-size: 11px; white-space: pre; }
+    #status { min-height: 100px; font-size: 12px; }
+    #self-multiaddr { min-height: 90px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row > * { flex: 0 0 auto; }
+    .row > input, .row > textarea { flex: 1 1 auto; }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--code-bg);
+      color: var(--muted);
+    }
+    .pill.ok { color: var(--ok); }
+    .pill.err { color: var(--err); }
+    .pill.warn { color: var(--warn); }
+    small { color: var(--muted); }
+    code {
+      background: var(--code-bg);
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .step-num {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      line-height: 20px;
+      text-align: center;
+      background: var(--accent);
+      color: var(--accent-text);
+      border-radius: 50%;
+      font-size: 11px;
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>IPFS ↔ IndexedDB Prototype</h1>
+    <p>
+      A single-page PWA that stores IPFS blocks in the browser's IndexedDB and
+      speaks libp2p over WebRTC + circuit-relay so it can traverse NAT.
+    </p>
+  </header>
+
+  <div class="grid">
+
+    <section>
+      <h2>
+        Actions
+        <span id="node-state" class="pill">booting…</span>
+        <span id="storage-stat" class="pill" title="Blockstore contents (block count · total block bytes) | IndexedDB disk usage / quota from navigator.storage.estimate()">0 blocks · 0 B</span>
+      </h2>
+
+      <p><span class="step-num">1</span>Generate a random 40-char string.</p>
+      <button id="btn-random">Generate random string</button>
+      <textarea id="random-out" readonly placeholder="(nothing yet)"></textarea>
+
+      <p><span class="step-num">2</span>Wrap it in a file (in-memory <code>Blob</code>).</p>
+      <button id="btn-file" disabled>Wrap in a file</button>
+      <div><small id="file-info">(no file yet)</small></div>
+
+      <p><span class="step-num">3</span>Add the file to IPFS. The block(s) go into the IndexedDB blockstore.</p>
+      <button id="btn-add" disabled>Add file to IPFS</button>
+      <label for="cid-out">CID</label>
+      <input type="text" id="cid-out" readonly placeholder="(no CID yet)" />
+
+      <p><span class="step-num">4</span>Retrieve by CID. The block(s) come back from IndexedDB (or the swarm if you don't have them locally).</p>
+      <div class="row">
+        <input type="text" id="cid-in" placeholder="paste a CID to retrieve (defaults to the CID above)" />
+        <button id="btn-retrieve" disabled>Retrieve</button>
+      </div>
+      <label for="retrieved-out">Retrieved content</label>
+      <textarea id="retrieved-out" readonly placeholder="(nothing retrieved yet)"></textarea>
+    </section>
+
+    <section>
+      <h2>Swarm <span id="swarm-state" class="pill">…</span></h2>
+
+      <label for="self-multiaddr">
+        This node's dialable addresses — share one of these with another peer:
+      </label>
+      <textarea id="self-multiaddr" readonly placeholder="(waiting for relay reservation…)"></textarea>
+      <button id="btn-refresh-ma" class="secondary">Refresh</button>
+      <button id="btn-copy-ma" class="secondary">Copy first</button>
+
+      <label for="peer-multiaddr">
+        Peer connection info — paste another node's multiaddr here:
+      </label>
+      <textarea id="peer-multiaddr" placeholder="/dns4/…/wss/p2p/…/p2p-circuit/webrtc/p2p/…"></textarea>
+      <button id="btn-connect" disabled>Connect to peer</button>
+
+      <label>Connected peers</label>
+      <textarea id="peers-out" readonly placeholder="(no peers connected)"></textarea>
+
+      <label>Peer events</label>
+      <textarea id="peer-events" readonly placeholder="(no peer events yet)"></textarea>
+    </section>
+
+    <section>
+      <h2>
+        Transaction log <small>IPFS ↔ IndexedDB</small>
+        <button id="btn-clear-log" class="secondary" style="margin:0">Clear</button>
+      </h2>
+      <textarea id="log" readonly></textarea>
+    </section>
+
+    <section>
+      <h2>Status</h2>
+      <textarea id="status" readonly></textarea>
+    </section>
+
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

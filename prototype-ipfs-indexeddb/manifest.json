@@ -1,0 +1,13 @@
+{
+  "name": "IPFS ↔ IndexedDB Prototype",
+  "short_name": "IPFS-IDB",
+  "description": "Single-page PWA showing IPFS blocks stored in the browser's IndexedDB, with libp2p WebRTC + circuit-relay swarm connectivity.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#14161a",
+  "theme_color": "#3b6ef0",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
