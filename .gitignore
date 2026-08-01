@@ -20,3 +20,4 @@ tmp/
 /prototype-apk/app/src/main/jniLibs/
 # Gradle wrapper jar is generated locally (see README)
 /prototype-apk/gradle/wrapper/gradle-wrapper.jar
+worktrees/
