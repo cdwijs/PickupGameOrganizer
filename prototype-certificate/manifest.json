@@ -1,0 +1,14 @@
+{
+  "name": "Signing Prototype",
+  "short_name": "Signing",
+  "description": "Minimal PWA that generates a public/private key pair, signs a message, and verifies the signature. Each step is a button; the time each step takes is shown next to it.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14161a",
+  "theme_color": "#3b6ef0",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
