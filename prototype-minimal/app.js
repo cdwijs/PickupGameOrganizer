@@ -20,19 +20,38 @@
 
 const $ = (id) => document.getElementById(id);
 
-// ---- login form ----------------------------------------------------------
+// ---- views + auth state --------------------------------------------------
 
+const mainView = $('main-view');
+const signinView = $('signin-view');
 const signinForm = $('signin-form');
 const usernameInput = $('signin-username');
+const passwordInput = $('signin-password');
 const accountStatus = $('account-status');
+const accountBtn = $('account-btn');
+const accountHint = $('account-hint');
 
-function setAccountStatus(username) {
-  if (username) {
+function showView(name) {
+  const showSignin = name === 'signin';
+  mainView.hidden = showSignin;
+  signinView.hidden = !showSignin;
+  if (showSignin) {
+    // Focus username so the browser's auto-fill picker has somewhere to land.
+    setTimeout(() => usernameInput.focus(), 0);
+  }
+}
+
+function renderAccount() {
+  if (state.username) {
     accountStatus.className = 'pill ok';
-    accountStatus.textContent = `signed in as ${username}`;
+    accountStatus.textContent = `signed in as ${state.username}`;
+    accountBtn.textContent = 'Sign out';
+    accountHint.innerHTML = 'Signed in — tap <em>Not going</em> / <em>Going</em> on a card to update the roster.';
   } else {
     accountStatus.className = 'pill';
     accountStatus.textContent = 'not signed in';
+    accountBtn.textContent = 'Sign in';
+    accountHint.innerHTML = 'Sign in to toggle <em>going</em> per game.';
   }
 }
 
@@ -50,22 +69,42 @@ signinForm.addEventListener('submit', async (evt) => {
   const fd = new FormData(signinForm);
   const username = String(fd.get('username') || '').trim();
   const password = String(fd.get('password') || '');
-  setAccountStatus(username);
+  if (!username) return;
+  state.username = username;
   await storeCredential(username, password);
-  // Re-render so the going/not-going state reflects the freshly-signed-in name.
+  showView('main');
   render();
 });
 
+$('signin-cancel').addEventListener('click', () => {
+  usernameInput.value = state.username;
+  passwordInput.value = '';
+  showView('main');
+});
+
+// Account button: open the sign-in view when signed out, sign out when signed in.
+accountBtn.addEventListener('click', () => {
+  if (state.username) {
+    state.username = '';
+    passwordInput.value = '';
+    // Leave usernameInput populated so the next sign-in has it pre-filled.
+    render();
+  } else {
+    showView('signin');
+  }
+});
+
 // Offer any saved credential on load (Chromium — Firefox/Safari fall back to
-// the browser's own auto-fill picker on the input).
+// the browser's own auto-fill picker on the input, which the user sees only
+// once they open the sign-in view).
 async function tryPrefill() {
   if (!navigator.credentials?.get) return;
   try {
     const cred = await navigator.credentials.get({ password: true, mediation: 'optional' });
     if (cred?.id) {
       usernameInput.value = cred.id;
-      if ('password' in cred && cred.password) $('signin-password').value = cred.password;
-      setAccountStatus(cred.id);
+      if ('password' in cred && cred.password) passwordInput.value = cred.password;
+      state.username = cred.id;
       render();
     }
   } catch { /* user dismissed, or no credential */ }
@@ -198,6 +237,7 @@ const state = {
   raw: '',
   parsed: { lines: [], blocks: [] },
   time: '',
+  username: '',
 };
 
 const pasteIn = $('paste-in');
@@ -207,7 +247,8 @@ const outStatus = $('out-status');
 const agendaStatus = $('agenda-status');
 
 function render() {
-  const username = usernameInput.value.trim();
+  renderAccount();
+  const username = state.username;
   const blocks = state.parsed.blocks;
 
   // Update the parse status pill.
@@ -323,7 +364,7 @@ $('copy-btn').addEventListener('click', async () => {
 // Card toggles: add or remove the signed-in user from the corresponding block.
 document.querySelectorAll('[data-toggle]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    const username = usernameInput.value.trim();
+    const username = state.username;
     if (!username) return;
     const idx = Number(btn.closest('.game').dataset.block);
     const block = state.parsed.blocks[idx];
@@ -334,12 +375,6 @@ document.querySelectorAll('[data-toggle]').forEach((btn) => {
   });
 });
 
-// Live update the going/not-going state as the user types their username.
-usernameInput.addEventListener('input', () => {
-  setAccountStatus(usernameInput.value.trim());
-  render();
-});
-
 // ---- boot ----------------------------------------------------------------
 
 if ('serviceWorker' in navigator) {
@@ -348,6 +383,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-setAccountStatus('');
+showView('main');
 render();
 tryPrefill();

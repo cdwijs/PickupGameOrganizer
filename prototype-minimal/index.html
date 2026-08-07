@@ -180,42 +180,18 @@
   </header>
 
   <main>
-    <!-- Login form. Same pattern as prototype-password so the browser recognizes
-         this as a login form and offers to save/restore the credentials. The
-         password is captured only for the browser's benefit; the app does not
-         use it. -->
+    <!-- Main view. Account section carries the sign-in/sign-out button whose
+         label flips with state. The sign-in form itself lives in the separate
+         signin view below so the form is only mounted when the user asks for it. -->
+    <div id="main-view">
     <section>
       <h2>Account
         <span id="account-status" class="pill">not signed in</span>
       </h2>
-      <form id="signin-form" method="post" action="#signed-in" autocomplete="on">
-        <label for="signin-username">Username</label>
-        <input
-          id="signin-username"
-          name="username"
-          type="text"
-          autocomplete="username"
-          autocapitalize="none"
-          autocorrect="off"
-          spellcheck="false"
-          required
-        />
-
-        <label for="signin-password">Password</label>
-        <input
-          id="signin-password"
-          name="password"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-
-        <button type="submit" class="wide">Sign in</button>
-        <p class="hint">
-          The browser should offer to save these credentials on submit, and
-          auto-fill them on a later visit. The password is not used by the app.
-        </p>
-      </form>
+      <button type="button" id="account-btn" class="wide">Sign in</button>
+      <p class="hint" id="account-hint">
+        Sign in to toggle <em>going</em> per game.
+      </p>
     </section>
 
     <!-- Two game cards. The date, weekday and player count are filled in from
@@ -305,6 +281,46 @@
         <button type="button" id="copy-btn">Copy to clipboard</button>
       </div>
     </section>
+    </div><!-- /#main-view -->
+
+    <!-- Sign-in view. Shown only after the user clicks the account button while
+         signed out; the form is otherwise unmounted from the visible flow.
+         Same autocomplete pattern as prototype-password so the browser
+         recognises it as a login form and offers to save the credentials. -->
+    <div id="signin-view" hidden>
+    <section>
+      <h2>Sign in</h2>
+      <form id="signin-form" method="post" action="#signed-in" autocomplete="on">
+        <label for="signin-username">Username</label>
+        <input
+          id="signin-username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+
+        <label for="signin-password">Password</label>
+        <input
+          id="signin-password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+
+        <button type="submit" class="wide">Sign in</button>
+        <button type="button" id="signin-cancel" class="wide secondary">Cancel</button>
+        <p class="hint">
+          The browser should offer to save these credentials on submit, and
+          auto-fill them on a later visit. The password is not used by the app.
+        </p>
+      </form>
+    </section>
+    </div><!-- /#signin-view -->
   </main>
 
   <script src="app.js"></script>
