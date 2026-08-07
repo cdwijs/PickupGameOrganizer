@@ -170,6 +170,13 @@
     }
     .status svg { width: 14px; height: 14px; }
     .paste-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .account-row {
+      display: flex; align-items: center; gap: 12px;
+      justify-content: space-between;
+    }
+    .account-row .pill { margin: 0; }
+    .account-row button { margin: 0; flex-shrink: 0; }
+    textarea::placeholder { white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -185,11 +192,11 @@
          signin view below so the form is only mounted when the user asks for it. -->
     <div id="main-view">
     <section>
-      <h2>Account
+      <div class="account-row">
         <span id="account-status" class="pill">not signed in</span>
-      </h2>
-      <button type="button" id="account-btn" class="wide">Sign in</button>
-      <p class="hint" id="account-hint">
+        <button type="button" id="account-btn">Sign in</button>
+      </div>
+      <p class="hint" id="account-hint" hidden>
         Sign in to toggle <em>going</em> per game.
       </p>
     </section>
@@ -259,15 +266,11 @@
       <h2>Paste roster
         <span id="parse-status" class="pill">empty</span>
       </h2>
-      <textarea id="paste-in" placeholder="Paste the Terrible Football roster message here…"></textarea>
+      <textarea id="paste-in" placeholder="Paste the Terrible Football roster message here… Parsing extracts the first two 🗓️ date blocks and their player lists. The cards above update as soon as you paste."></textarea>
       <div class="paste-row">
         <button type="button" id="paste-btn">Paste from clipboard</button>
         <button type="button" id="clear-in" class="secondary">Clear</button>
       </div>
-      <p class="hint">
-        Parsing extracts the first two <code>🗓️</code> date blocks and their
-        player lists. The cards above update as soon as you paste.
-      </p>
     </section>
 
     <!-- Output area. Rewritten from the parsed structure every time the toggles

@@ -46,12 +46,12 @@ function renderAccount() {
     accountStatus.className = 'pill ok';
     accountStatus.textContent = `signed in as ${state.username}`;
     accountBtn.textContent = 'Sign out';
-    accountHint.innerHTML = 'Signed in — tap <em>Not going</em> / <em>Going</em> on a card to update the roster.';
+    accountHint.hidden = true;
   } else {
     accountStatus.className = 'pill';
     accountStatus.textContent = 'not signed in';
     accountBtn.textContent = 'Sign in';
-    accountHint.innerHTML = 'Sign in to toggle <em>going</em> per game.';
+    accountHint.hidden = false;
   }
 }
 
