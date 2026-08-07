@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Password Prototype</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <meta name="theme-color" content="#3b6ef0" />
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --border: #d6d9de;
+      --text: #1c1e21;
+      --muted: #5c6470;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --ok: #2d9c4a;
+      --err: #d73a49;
+      --code-bg: #f0f2f5;
+      --measure: 480px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --ok: #3fb950;
+        --err: #ff7b72;
+        --code-bg: #23272f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    header { max-width: var(--measure); margin: 0 auto 16px; }
+    header h1 { margin: 0 0 4px; font-size: 20px; }
+    header p { margin: 0; color: var(--muted); }
+    main { max-width: var(--measure); margin: 0 auto; display: grid; gap: 16px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      min-width: 0;
+    }
+    section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    section h2 .pill { margin-left: auto; }
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      margin: 0 0 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .mode-toggle button {
+      flex: 1;
+      margin: 0;
+      border: 0;
+      border-radius: 0;
+      background: var(--panel);
+      color: var(--text);
+      padding: 8px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .mode-toggle button.active {
+      background: var(--accent);
+      color: var(--accent-text);
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 8px 0 3px;
+    }
+    input[type="text"], input[type="password"], input[type="email"] {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--code-bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    button {
+      display: inline-block;
+      padding: 8px 14px;
+      margin: 4px 4px 4px 0;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: var(--accent-text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--panel); color: var(--text); }
+    button.wide { width: 100%; margin-top: 8px; }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--code-bg);
+      color: var(--muted);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    .pill.ok { color: var(--ok); }
+    .pill.err { color: var(--err); }
+    p.hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+    pre.output {
+      margin: 6px 0 0;
+      padding: 8px 10px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+    pre.output:empty::before { content: "—"; color: var(--muted); }
+    #log {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      max-height: 160px;
+      overflow: auto;
+    }
+    #log div { white-space: pre-wrap; word-break: break-all; }
+    #log .ok { color: var(--ok); }
+    #log .err { color: var(--err); }
+    .row-links {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    .row-links a {
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .row-links a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Password Prototype</h1>
+    <p>A minimal PWA with a login form the browser recognizes as such: proper
+       <code>autocomplete</code> attributes, a real form submit, and an explicit
+       call to the Credential Management API so the browser offers to save the
+       username and password.</p>
+  </header>
+
+  <main>
+    <section>
+      <div class="mode-toggle" role="tablist">
+        <button id="mode-signin" class="active" role="tab" aria-selected="true">Sign in</button>
+        <button id="mode-signup" role="tab" aria-selected="false">Create account</button>
+      </div>
+
+      <!-- Sign-in form. Uses autocomplete="username" + "current-password",
+           which is what password managers look for on a login form. -->
+      <form id="signin-form" method="post" action="#signed-in" autocomplete="on">
+        <label for="signin-username">Username</label>
+        <input
+          id="signin-username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+
+        <label for="signin-password">Password</label>
+        <input
+          id="signin-password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+
+        <button type="submit" class="wide">Sign in</button>
+        <p class="hint" id="signin-hint">
+          Fill in a username and password, then submit. The browser should offer
+          to save the credentials (or auto-fill if you have already saved them).
+        </p>
+      </form>
+
+      <!-- Sign-up form. Uses autocomplete="new-password", which triggers the
+           browser's password-generator suggestion instead of the auto-fill UI. -->
+      <form id="signup-form" method="post" action="#signed-up" autocomplete="on" hidden>
+        <label for="signup-username">Choose a username</label>
+        <input
+          id="signup-username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+
+        <label for="signup-email">Email (optional)</label>
+        <input
+          id="signup-email"
+          name="email"
+          type="email"
+          autocomplete="email"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+        />
+
+        <label for="signup-password">New password</label>
+        <input
+          id="signup-password"
+          name="new-password"
+          type="password"
+          autocomplete="new-password"
+          minlength="8"
+          required
+        />
+
+        <label for="signup-password-confirm">Confirm password</label>
+        <input
+          id="signup-password-confirm"
+          name="new-password-confirm"
+          type="password"
+          autocomplete="new-password"
+          minlength="8"
+          required
+        />
+
+        <button type="submit" class="wide">Create account</button>
+        <p class="hint">
+          Password managers see <code>autocomplete="new-password"</code> and
+          offer to suggest a strong password. On successful submit, the
+          browser is asked to store the new credential.
+        </p>
+      </form>
+    </section>
+
+    <section>
+      <h2>Last submission
+        <span id="last-status" class="pill">nothing yet</span>
+      </h2>
+      <p class="hint">
+        Shows the values the form last submitted. The password is masked here;
+        this prototype does not send anything to a server.
+      </p>
+      <pre class="output" id="last-out"></pre>
+      <div class="row-links">
+        <a id="try-credmgr">Try navigator.credentials.get()</a>
+        <a id="clear-last">Clear</a>
+      </div>
+      <p class="hint" id="credmgr-hint">
+        <code>navigator.credentials.get({ password: true, mediation: 'optional' })</code>
+        asks the browser for a stored credential for this origin. If one is
+        saved, the browser returns it (sometimes after a picker); otherwise
+        it returns <code>null</code>.
+      </p>
+    </section>
+
+    <section>
+      <h2>Environment
+        <span id="env-status" class="pill">checking…</span>
+      </h2>
+      <p class="hint">
+        Password saving needs a secure context (HTTPS or <code>localhost</code>).
+        The Credential Management API needs the same, plus browser support for
+        <code>PasswordCredential</code> (Chromium-based browsers; Firefox and
+        Safari fall back to the plain form-save flow).
+      </p>
+      <pre class="output" id="env-out"></pre>
+    </section>
+
+    <section>
+      <h2>Log</h2>
+      <div id="log"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
