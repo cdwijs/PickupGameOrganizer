@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Minimal Prototype</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <meta name="theme-color" content="#3b6ef0" />
+  <style>
+    :root {
+      --bg: #eef1f5;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --ok: #16a34a;
+      --ok-soft: #bbf7d0;
+      --err: #d73a49;
+      --code-bg: #f1f5f9;
+      --measure: 480px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --ok: #3fb950;
+        --ok-soft: #1f4a2b;
+        --err: #ff7b72;
+        --code-bg: #23272f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    header { max-width: var(--measure); margin: 0 auto 16px; }
+    header h1 { margin: 0 0 4px; font-size: 20px; }
+    header p { margin: 0; color: var(--muted); }
+    main { max-width: var(--measure); margin: 0 auto; display: grid; gap: 16px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      min-width: 0;
+    }
+    section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    section h2 .pill { margin-left: auto; }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 8px 0 3px;
+    }
+    input[type="text"], input[type="password"], input[type="email"], textarea {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--code-bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 140px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre;
+    }
+    input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    button {
+      display: inline-block;
+      padding: 8px 14px;
+      margin: 4px 4px 4px 0;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: var(--accent-text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--panel); color: var(--text); }
+    button.wide { width: 100%; margin-top: 8px; }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--code-bg);
+      color: var(--muted);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    .pill.ok { color: var(--ok); }
+    .pill.err { color: var(--err); }
+    p.hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+
+    /* ---- game cards ---- */
+    .game {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      margin-bottom: 10px;
+    }
+    .game:last-child { margin-bottom: 0; }
+    .game.is-going { border-color: var(--ok-soft); }
+    .avatar {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: #1d4ed8; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+    }
+    .avatar svg { width: 28px; height: 28px; }
+    .game-mid { flex: 1; min-width: 0; }
+    .game-name { font-size: 14px; font-weight: 700; line-height: 1.15; }
+    .game-when { font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 2px; }
+    .game.is-going .game-when { color: var(--ok); }
+    .game-right {
+      display: flex; flex-direction: column; align-items: flex-end;
+      gap: 6px; min-width: 78px;
+    }
+    .players { display: flex; flex-direction: column; align-items: flex-end; line-height: 1; }
+    .players .p-num { font-size: 22px; font-weight: 700; }
+    .players .p-lbl { font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 2px; }
+    .status {
+      display: inline-flex; align-items: center; gap: 6px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 12px; font-weight: 700;
+      cursor: pointer;
+      background: var(--code-bg);
+      color: var(--muted);
+      margin: 0;
+    }
+    .status.going {
+      background: var(--ok);
+      color: #fff;
+      border-color: var(--ok);
+    }
+    .status svg { width: 14px; height: 14px; }
+    .paste-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Minimal Prototype</h1>
+    <p>Sign in, paste a Terrible Football roster, and toggle <em>going</em> per game.
+       The roster in the bottom box updates live with your name.</p>
+  </header>
+
+  <main>
+    <!-- Login form. Same pattern as prototype-password so the browser recognizes
+         this as a login form and offers to save/restore the credentials. The
+         password is captured only for the browser's benefit; the app does not
+         use it. -->
+    <section>
+      <h2>Account
+        <span id="account-status" class="pill">not signed in</span>
+      </h2>
+      <form id="signin-form" method="post" action="#signed-in" autocomplete="on">
+        <label for="signin-username">Username</label>
+        <input
+          id="signin-username"
+          name="username"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+
+        <label for="signin-password">Password</label>
+        <input
+          id="signin-password"
+          name="password"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
+
+        <button type="submit" class="wide">Sign in</button>
+        <p class="hint">
+          The browser should offer to save these credentials on submit, and
+          auto-fill them on a later visit. The password is not used by the app.
+        </p>
+      </form>
+    </section>
+
+    <!-- Two game cards. The date, weekday and player count are filled in from
+         whatever the user pastes below. Tap the pill to toggle going / not going;
+         the roster text is rewritten to add or remove your username. -->
+    <section>
+      <h2>Agenda
+        <span id="agenda-status" class="pill">paste a roster below</span>
+      </h2>
+
+      <div class="game" id="game-0" data-block="0">
+        <div class="avatar">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <polygon points="12,8.6 15.23,10.95 14.0,14.75 10.0,14.75 8.77,10.95" fill="currentColor" stroke="none"/>
+            <line x1="12" y1="8.6" x2="12" y2="3"/>
+            <line x1="15.23" y1="10.95" x2="20.56" y2="9.22"/>
+            <line x1="14.0" y1="14.75" x2="17.29" y2="19.28"/>
+            <line x1="10.0" y1="14.75" x2="6.71" y2="19.28"/>
+            <line x1="8.77" y1="10.95" x2="3.44" y2="9.22"/>
+          </svg>
+        </div>
+        <div class="game-mid">
+          <div class="game-name">Terrible Football Haarlem</div>
+          <div class="game-when" data-when>—</div>
+        </div>
+        <div class="game-right">
+          <div class="players">
+            <span class="p-num" data-count>0</span>
+            <span class="p-lbl">players</span>
+          </div>
+          <button type="button" class="status" data-toggle>Not going</button>
+        </div>
+      </div>
+
+      <div class="game" id="game-1" data-block="1">
+        <div class="avatar">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <polygon points="12,8.6 15.23,10.95 14.0,14.75 10.0,14.75 8.77,10.95" fill="currentColor" stroke="none"/>
+            <line x1="12" y1="8.6" x2="12" y2="3"/>
+            <line x1="15.23" y1="10.95" x2="20.56" y2="9.22"/>
+            <line x1="14.0" y1="14.75" x2="17.29" y2="19.28"/>
+            <line x1="10.0" y1="14.75" x2="6.71" y2="19.28"/>
+            <line x1="8.77" y1="10.95" x2="3.44" y2="9.22"/>
+          </svg>
+        </div>
+        <div class="game-mid">
+          <div class="game-name">Terrible Football Haarlem</div>
+          <div class="game-when" data-when>—</div>
+        </div>
+        <div class="game-right">
+          <div class="players">
+            <span class="p-num" data-count>0</span>
+            <span class="p-lbl">players</span>
+          </div>
+          <button type="button" class="status" data-toggle>Not going</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Paste area. The Paste-from-clipboard button uses the async Clipboard API;
+         browsers without it fall back to the user pasting manually into the box. -->
+    <section>
+      <h2>Paste roster
+        <span id="parse-status" class="pill">empty</span>
+      </h2>
+      <textarea id="paste-in" placeholder="Paste the Terrible Football roster message here…"></textarea>
+      <div class="paste-row">
+        <button type="button" id="paste-btn">Paste from clipboard</button>
+        <button type="button" id="clear-in" class="secondary">Clear</button>
+      </div>
+      <p class="hint">
+        Parsing extracts the first two <code>🗓️</code> date blocks and their
+        player lists. The cards above update as soon as you paste.
+      </p>
+    </section>
+
+    <!-- Output area. Rewritten from the parsed structure every time the toggles
+         change so the copy-to-clipboard button always emits the current roster. -->
+    <section>
+      <h2>Updated roster
+        <span id="out-status" class="pill">—</span>
+      </h2>
+      <textarea id="paste-out" readonly placeholder="The updated roster appears here after you paste and toggle."></textarea>
+      <div class="paste-row">
+        <button type="button" id="copy-btn">Copy to clipboard</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
