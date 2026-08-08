@@ -46,9 +46,6 @@
       font-size: 14px;
       line-height: 1.5;
     }
-    header { max-width: var(--measure); margin: 0 auto 16px; }
-    header h1 { margin: 0 0 4px; font-size: 20px; }
-    header p { margin: 0; color: var(--muted); }
     main { max-width: var(--measure); margin: 0 auto; display: grid; gap: 16px; }
     section {
       background: var(--panel);
@@ -153,11 +150,11 @@
     .players .p-num { font-size: 22px; font-weight: 700; }
     .players .p-lbl { font-size: 11px; font-weight: 600; color: var(--muted); margin-top: 2px; }
     .status {
-      display: inline-flex; align-items: center; gap: 6px;
+      display: inline-flex; align-items: center; gap: 8px;
       border: 1px solid var(--border);
       border-radius: 999px;
-      padding: 5px 12px;
-      font-size: 12px; font-weight: 700;
+      padding: 10px 20px;
+      font-size: 15px; font-weight: 700;
       cursor: pointer;
       background: var(--code-bg);
       color: var(--muted);
@@ -168,7 +165,7 @@
       color: #fff;
       border-color: var(--ok);
     }
-    .status svg { width: 14px; height: 14px; }
+    .status svg { width: 18px; height: 18px; }
     .paste-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
     .account-row {
       display: flex; align-items: center; gap: 12px;
@@ -180,12 +177,6 @@
   </style>
 </head>
 <body>
-  <header>
-    <h1>Minimal Prototype</h1>
-    <p>Sign in, paste a Terrible Football roster, and toggle <em>going</em> per game.
-       The roster in the bottom box updates live with your name.</p>
-  </header>
-
   <main>
     <!-- Main view. Account section carries the sign-in/sign-out button whose
          label flips with state. The sign-in form itself lives in the separate
@@ -196,18 +187,13 @@
         <span id="account-status" class="pill">not signed in</span>
         <button type="button" id="account-btn">Sign in</button>
       </div>
-      <p class="hint" id="account-hint" hidden>
-        Sign in to toggle <em>going</em> per game.
-      </p>
     </section>
 
     <!-- Two game cards. The date, weekday and player count are filled in from
          whatever the user pastes below. Tap the pill to toggle going / not going;
          the roster text is rewritten to add or remove your username. -->
     <section>
-      <h2>Agenda
-        <span id="agenda-status" class="pill">paste a roster below</span>
-      </h2>
+      <h2>Agenda</h2>
 
       <div class="game" id="game-0" data-block="0">
         <div class="avatar">
@@ -266,7 +252,7 @@
       <h2>Paste roster
         <span id="parse-status" class="pill">empty</span>
       </h2>
-      <textarea id="paste-in" placeholder="Paste the Terrible Football roster message here… Parsing extracts the first two 🗓️ date blocks and their player lists. The cards above update as soon as you paste."></textarea>
+      <textarea id="paste-in" placeholder="Paste the roster message here… Parsing extracts the first two 🗓️ date blocks and their player lists. The cards above update as soon as you paste."></textarea>
       <div class="paste-row">
         <button type="button" id="paste-btn">Paste from clipboard</button>
         <button type="button" id="clear-in" class="secondary">Clear</button>
@@ -279,7 +265,7 @@
       <h2>Updated roster
         <span id="out-status" class="pill">—</span>
       </h2>
-      <textarea id="paste-out" readonly placeholder="The updated roster appears here after you paste and toggle."></textarea>
+      <textarea id="paste-out" readonly placeholder="The updated roster appears here."></textarea>
       <div class="paste-row">
         <button type="button" id="copy-btn">Copy to clipboard</button>
       </div>

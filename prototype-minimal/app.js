@@ -29,7 +29,6 @@ const usernameInput = $('signin-username');
 const passwordInput = $('signin-password');
 const accountStatus = $('account-status');
 const accountBtn = $('account-btn');
-const accountHint = $('account-hint');
 
 function showView(name) {
   const showSignin = name === 'signin';
@@ -46,12 +45,10 @@ function renderAccount() {
     accountStatus.className = 'pill ok';
     accountStatus.textContent = `signed in as ${state.username}`;
     accountBtn.textContent = 'Sign out';
-    accountHint.hidden = true;
   } else {
     accountStatus.className = 'pill';
     accountStatus.textContent = 'not signed in';
     accountBtn.textContent = 'Sign in';
-    accountHint.hidden = false;
   }
 }
 
@@ -174,12 +171,35 @@ function renderRoster(parsed) {
   return out.join('\n');
 }
 
-// Case-insensitive "does the roster contain the user" — a signed-in user
-// counts as going for a block if their username appears in any non-empty slot.
+// Signed-in players go into the roster as `<username> (app)` so a reader can
+// tell app-added names from ones typed manually. Match is case-insensitive
+// and tolerates either form so a manually-added "Cedric" still reads as going.
+const APP_SUFFIX = ' (app)';
+function displayName(username) { return `${username}${APP_SUFFIX}`; }
+function isSameUser(slot, username) {
+  const s = slot.toLowerCase();
+  const u = username.toLowerCase();
+  return s === u || s === u + APP_SUFFIX.toLowerCase();
+}
+
 function isUserIn(block, username) {
   if (!username) return false;
-  const u = username.toLowerCase();
-  return block.players.some((p) => p.toLowerCase() === u);
+  return block.players.some((p) => isSameUser(p, username));
+}
+
+// Rewrite any bare "<username>" slot to "<username> (app)" so the output
+// roster always tags the signed-in user. Idempotent — slots already in the
+// (app) form are left alone.
+function normalizeUserSlots(parsed, username) {
+  if (!username) return;
+  const tagged = displayName(username);
+  for (const b of parsed.blocks) {
+    for (let i = 0; i < b.players.length; i++) {
+      if (isSameUser(b.players[i], username) && b.players[i] !== tagged) {
+        b.players[i] = tagged;
+      }
+    }
+  }
 }
 
 // Add username to the first empty slot, or append a new numbered slot if all
@@ -189,17 +209,17 @@ function isUserIn(block, username) {
 // players.length grows past the original count, splice grows the array to
 // fit the new lines without touching the blank line that follows the block.
 function addUser(block, username) {
+  const name = displayName(username);
   const firstEmpty = block.players.findIndex((p) => p === '');
-  if (firstEmpty >= 0) block.players[firstEmpty] = username;
-  else block.players.push(username);
+  if (firstEmpty >= 0) block.players[firstEmpty] = name;
+  else block.players.push(name);
 }
 
-// Empty the user's slot (case-insensitive match). Keep the slot itself so the
-// numbering doesn't shift, matching the "01. Alice / 02. / 03. " pattern.
+// Empty the user's slot (case-insensitive match; either "<name>" or
+// "<name> (app)"). Keep the slot itself so the numbering doesn't shift.
 function removeUser(block, username) {
-  const u = username.toLowerCase();
   for (let i = 0; i < block.players.length; i++) {
-    if (block.players[i].toLowerCase() === u) block.players[i] = '';
+    if (isSameUser(block.players[i], username)) block.players[i] = '';
   }
 }
 
@@ -244,11 +264,11 @@ const pasteIn = $('paste-in');
 const pasteOut = $('paste-out');
 const parseStatus = $('parse-status');
 const outStatus = $('out-status');
-const agendaStatus = $('agenda-status');
 
 function render() {
   renderAccount();
   const username = state.username;
+  normalizeUserSlots(state.parsed, username);
   const blocks = state.parsed.blocks;
 
   // Update the parse status pill.
@@ -257,13 +277,9 @@ function render() {
     parseStatus.textContent = 'empty';
     outStatus.className = 'pill';
     outStatus.textContent = '—';
-    agendaStatus.className = 'pill';
-    agendaStatus.textContent = 'paste a roster below';
   } else {
     parseStatus.className = blocks.length ? 'pill ok' : 'pill err';
     parseStatus.textContent = `${blocks.length} date block${blocks.length === 1 ? '' : 's'}`;
-    agendaStatus.className = username ? 'pill ok' : 'pill';
-    agendaStatus.textContent = username ? `roster loaded — ${username}` : 'roster loaded';
   }
 
   // Update each game card. We wire up two cards; extra blocks are ignored,
@@ -325,6 +341,16 @@ function ingest(text) {
 
 pasteIn.addEventListener('input', () => ingest(pasteIn.value));
 
+// After a native paste the caret lands at the end of the pasted text, which
+// scrolls the box to the bottom-right. Snap it back to the top-left so the
+// user sees the start of the roster.
+pasteIn.addEventListener('paste', () => {
+  setTimeout(() => {
+    pasteIn.scrollTop = 0;
+    pasteIn.scrollLeft = 0;
+  }, 0);
+});
+
 $('paste-btn').addEventListener('click', async () => {
   if (!navigator.clipboard?.readText) {
     alert('Clipboard read not available in this browser — paste into the box manually.');
@@ -334,6 +360,8 @@ $('paste-btn').addEventListener('click', async () => {
     const text = await navigator.clipboard.readText();
     pasteIn.value = text;
     ingest(text);
+    pasteIn.scrollTop = 0;
+    pasteIn.scrollLeft = 0;
   } catch (err) {
     alert(`Clipboard read failed: ${err.message}`);
   }
