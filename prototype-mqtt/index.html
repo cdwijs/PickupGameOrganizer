@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>MQTT Prototype</title>
+  <meta name="theme-color" content="#3b6ef0" />
+  <style>
+    :root {
+      --bg: #eef1f5;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --ok: #16a34a;
+      --err: #d73a49;
+      --warn: #d97706;
+      --code-bg: #f1f5f9;
+      --measure: 640px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --ok: #3fb950;
+        --err: #ff7b72;
+        --warn: #f2b96b;
+        --code-bg: #23272f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .wrap { max-width: var(--measure); margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+    h1 { font-size: 18px; margin: 0; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    section h2 .pill { margin-left: auto; }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 8px 0 3px;
+    }
+    input[type="text"], input[type="number"], input[type="password"], select, textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--code-bg);
+      color: var(--text);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 70px;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    button {
+      display: inline-block;
+      padding: 8px 14px;
+      margin: 4px 4px 0 0;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: var(--accent-text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--panel); color: var(--text); }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+    @media (max-width: 480px) { .grid-2 { grid-template-columns: 1fr; } }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--code-bg);
+      color: var(--muted);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    .pill.ok  { color: var(--ok);  background: color-mix(in srgb, var(--ok)  20%, transparent); }
+    .pill.err { color: var(--err); background: color-mix(in srgb, var(--err) 20%, transparent); }
+    .pill.warn{ color: var(--warn);background: color-mix(in srgb, var(--warn)20%, transparent); }
+    p.hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+    #log {
+      background: #0f1115; color: #d6e0ff;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px; border-radius: 6px; padding: 10px;
+      height: 140px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+      border: 1px solid var(--border);
+    }
+    #log .recv { color: #7ee787; }
+    #log .send { color: #79c0ff; }
+    #log .err  { color: #ff7b72; }
+    #log .warn { color: #f2b96b; }
+    .checkbox-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+    .checkbox-row input { width: auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <section>
+      <h2>MQTT Prototype
+        <span id="conn-pill" class="pill">disconnected</span>
+      </h2>
+      <p class="hint">
+        End-to-end encrypted messaging via a public MQTT broker. Both peers
+        share the AES-GCM key out-of-band; the broker only ever sees ciphertext.
+      </p>
+    </section>
+
+    <!-- ─── MQTT connection parameters ────────────────────────────────────── -->
+    <section>
+      <h2>Connection</h2>
+
+      <label for="cfg-preset">Broker preset</label>
+      <select id="cfg-preset">
+        <option value="freemqtt">freemqtt.com (wss:8084)</option>
+        <option value="emqx">broker.emqx.io (wss:8084)</option>
+        <option value="hivemq">broker.hivemq.com (wss:8884)</option>
+        <option value="mosquitto">test.mosquitto.org (wss:8081)</option>
+        <option value="custom">Custom (edit fields below)</option>
+      </select>
+
+      <label for="cfg-url">WebSocket URL (WSS preferred)</label>
+      <input id="cfg-url" type="text" value="wss://broker.freemqtt.com:8084/mqtt" />
+
+      <div class="grid-2">
+        <div>
+          <label for="cfg-user">Username</label>
+          <input id="cfg-user" type="text" value="freemqtt" />
+        </div>
+        <div>
+          <label for="cfg-pass">Password</label>
+          <input id="cfg-pass" type="password" value="public" />
+        </div>
+      </div>
+
+      <label for="cfg-client">Client ID <span class="pill">unique per session</span></label>
+      <input id="cfg-client" type="text" />
+
+      <div class="grid-2">
+        <div>
+          <label for="cfg-topic-pub">Publish topic</label>
+          <input id="cfg-topic-pub" type="text" value="dev/prototype/msg-a" />
+        </div>
+        <div>
+          <label for="cfg-topic-sub">Subscribe topic</label>
+          <input id="cfg-topic-sub" type="text" value="dev/prototype/msg-b" />
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label for="cfg-qos">QoS (0 or 1)</label>
+          <input id="cfg-qos" type="number" min="0" max="1" step="1" value="1" />
+        </div>
+        <div>
+          <label for="cfg-keepalive">Keepalive (s)</label>
+          <input id="cfg-keepalive" type="number" min="10" max="300" step="1" value="60" />
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label for="cfg-lwt-topic">Last-will topic</label>
+          <input id="cfg-lwt-topic" type="text" value="dev/prototype/lwt" />
+        </div>
+        <div>
+          <label for="cfg-lwt-payload">Last-will payload</label>
+          <input id="cfg-lwt-payload" type="text" value="offline" />
+        </div>
+      </div>
+
+      <div class="checkbox-row">
+        <label><input id="cfg-retained" type="checkbox" /> Retain published messages (avoid for ephemeral tests)</label>
+      </div>
+
+      <div class="row">
+        <button id="btn-connect" type="button">Connect</button>
+        <button id="btn-disconnect" type="button" class="secondary" disabled>Disconnect</button>
+      </div>
+      <p class="hint">
+        Reconnect uses exponential backoff with jitter (1s → 30s cap).
+        Payloads over 64 KB are refused client-side.
+      </p>
+    </section>
+
+    <!-- ─── Encryption key ────────────────────────────────────────────────── -->
+    <section>
+      <h2>Encryption key
+        <span id="key-pill" class="pill">no key</span>
+      </h2>
+      <label for="key-b64">AES-GCM 256-bit key (Base64) — share out-of-band with the peer</label>
+      <input id="key-b64" type="text" placeholder="(none — click Generate, or paste a key from the peer)" />
+      <div class="row">
+        <button id="btn-gen-key" type="button">Generate new key</button>
+        <button id="btn-copy-key" type="button" class="secondary">Copy key</button>
+      </div>
+    </section>
+
+    <!-- ─── Send ──────────────────────────────────────────────────────────── -->
+    <section>
+      <h2>Send</h2>
+      <label for="tx-plain">Plaintext</label>
+      <textarea id="tx-plain" placeholder="Type a message to send…"></textarea>
+
+      <label for="tx-cipher">Ciphertext to be published (Base64: IV ‖ ciphertext ‖ tag)</label>
+      <textarea id="tx-cipher" readonly placeholder="(auto-encrypted preview appears here)"></textarea>
+
+      <div class="row">
+        <button id="btn-send" type="button" disabled>Send</button>
+        <button id="btn-clear-tx" type="button" class="secondary">Clear</button>
+      </div>
+    </section>
+
+    <!-- ─── Receive ───────────────────────────────────────────────────────── -->
+    <section>
+      <h2>Receive
+        <span id="rx-pill" class="pill">idle</span>
+      </h2>
+      <label for="rx-cipher">Ciphertext received (Base64)</label>
+      <textarea id="rx-cipher" readonly placeholder="(incoming ciphertext appears here)"></textarea>
+
+      <label for="rx-plain">Plaintext (decrypted)</label>
+      <textarea id="rx-plain" readonly placeholder="(decrypted plaintext appears here)"></textarea>
+    </section>
+
+    <!-- ─── Log ───────────────────────────────────────────────────────────── -->
+    <section>
+      <h2>Log</h2>
+      <div id="log"></div>
+    </section>
+
+  </div>
+
+  <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

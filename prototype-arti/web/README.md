@@ -26,12 +26,20 @@ Opening the file directly (`file://…/index.html`) also works, but serving over
 
 ## Connecting two peers
 
-1. **Host** presses **Host (create offer)**, copies *Your signal*, and sends it
-   to the peer (chat, email, etc.).
-2. **Joiner** pastes that into *Peer's signal*, presses **Join (create answer)**,
-   and sends their generated signal back.
-3. **Host** pastes the joiner's answer and presses **Finish connect (apply
-   answer)**.
+The page opens on a role picker — each peer chooses **Host** or **Join**, then
+gets a dedicated view with only that role's textareas (host and joiner never
+share a textbox).
+
+1. **Host** presses **Host a connection**, copies *Your offer*, and sends it to
+   the peer (chat, email, etc.).
+2. **Joiner** presses **Join a connection**, pastes the host's offer into
+   *Host's offer*, presses **Create answer**, and sends the resulting *Your
+   answer* back to the host.
+3. **Host** pastes the joiner's answer into *Joiner's answer* and presses
+   **Finish connect**.
+
+Either side can press **Back** to return to the role picker; that tears down
+the current attempt and clears the fields.
 
 When the status shows **Connected**, press **Send increasing number every
 second** in either window. Press it again to **pause**, again to **resume** —
@@ -43,7 +51,7 @@ status log as `⟵ received: N`.
 | Native (`src/main.rs`)                    | Web (`web/index.html`)                     |
 |-------------------------------------------|--------------------------------------------|
 | Tor onion service + dial                  | WebRTC data channel (copy/paste signaling) |
-| Onion address / `/onion3` multiaddr       | JSON offer/answer "signal" blob            |
+| Onion address / `/onion3` multiaddr       | JSON offer / answer blobs (per-role views) |
 | Length-prefixed byte stream               | `RTCDataChannel.send()` string messages    |
 | Counter start → pause → resume            | Same toggle button                         |
 | Status log + received data                | Status log + received data                 |

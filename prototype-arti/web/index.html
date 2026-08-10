@@ -76,7 +76,10 @@
       background: var(--muted); margin-right: 7px; vertical-align: middle;
     }
     .status-dot.on { background: var(--ok); }
-    .conn-state { font-size: 0.9rem; color: var(--muted); margin-bottom: 4px; }
+    .conn-state {
+      font-size: 0.9rem; color: var(--muted);
+      margin: 0 0 16px;
+    }
     .steps { font-size: 0.85rem; color: var(--muted); margin: 0 0 8px; padding-left: 18px; }
     .steps li { margin: 3px 0; }
     #log {
@@ -101,27 +104,65 @@
       Firefox, Chromium, and Safari.
     </p>
 
-    <div class="panel">
-      <h2>Connection</h2>
-      <div class="conn-state"><span id="dot" class="status-dot"></span><span id="connState">Not connected</span></div>
+    <div class="conn-state">
+      <span id="dot" class="status-dot"></span><span id="connState">Not connected</span>
+    </div>
+
+    <!-- Role picker. Shown first; picking a role reveals the matching view below. -->
+    <div id="roleView" class="panel">
+      <h2>Choose your role</h2>
+      <p class="hint" style="margin-top:0">
+        One peer <strong>hosts</strong> the connection; the other <strong>joins</strong>
+        by pasting the host's signal. Pick whichever fits — the two sides can swap freely.
+      </p>
+      <div class="row">
+        <button id="btnPickHost" class="primary">Host a connection</button>
+        <button id="btnPickJoiner" class="primary">Join a connection</button>
+      </div>
+    </div>
+
+    <!-- Host flow. Has its own two textareas so signal data never shares a
+         textbox with the joiner view. -->
+    <div id="hostView" class="panel" hidden>
+      <h2>Host</h2>
       <ol class="steps">
-        <li><strong>Host:</strong> press <em>Host (create offer)</em>, then copy the signal and send it to your peer.</li>
-        <li><strong>Joiner:</strong> paste the host's signal below, press <em>Join (create answer)</em>, then send your signal back.</li>
-        <li><strong>Host:</strong> paste the joiner's answer and press <em>Finish connect</em>.</li>
+        <li>Copy <em>Your offer</em> below and send it to the joiner.</li>
+        <li>Paste the joiner's answer, then press <em>Finish connect</em>.</li>
       </ol>
 
-      <label for="outSignal">Your signal — copy &amp; send to peer</label>
-      <textarea id="outSignal" readonly placeholder="(generated after you Host or Join)"></textarea>
+      <label for="hostOffer">Your offer — send to joiner</label>
+      <textarea id="hostOffer" readonly placeholder="(offer being generated…)"></textarea>
       <div class="row">
-        <button id="btnHost" class="primary">Host (create offer)</button>
-        <button id="btnCopy" disabled>Copy signal</button>
+        <button id="btnHostCopy" disabled>Copy offer</button>
       </div>
 
-      <label for="inSignal">Peer's signal — paste here</label>
-      <textarea id="inSignal" placeholder="Paste the offer or answer you received from your peer"></textarea>
+      <label for="hostAnswerIn">Joiner's answer — paste here</label>
+      <textarea id="hostAnswerIn" placeholder="Paste the answer you got back from the joiner"></textarea>
       <div class="row">
-        <button id="btnJoin">Join (create answer)</button>
-        <button id="btnFinish" disabled>Finish connect (apply answer)</button>
+        <button id="btnHostFinish" class="primary" disabled>Finish connect</button>
+        <button id="btnHostBack">Back</button>
+      </div>
+    </div>
+
+    <!-- Joiner flow. Separate textareas from the host view. -->
+    <div id="joinerView" class="panel" hidden>
+      <h2>Join</h2>
+      <ol class="steps">
+        <li>Paste the host's offer below, then press <em>Create answer</em>.</li>
+        <li>Copy <em>Your answer</em> and send it back to the host.</li>
+      </ol>
+
+      <label for="joinerOfferIn">Host's offer — paste here</label>
+      <textarea id="joinerOfferIn" placeholder="Paste the offer you got from the host"></textarea>
+      <div class="row">
+        <button id="btnJoinerCreate" class="primary">Create answer</button>
+      </div>
+
+      <label for="joinerAnswer">Your answer — send back to host</label>
+      <textarea id="joinerAnswer" readonly placeholder="(answer appears here after you press Create answer)"></textarea>
+      <div class="row">
+        <button id="btnJoinerCopy" disabled>Copy answer</button>
+        <button id="btnJoinerBack">Back</button>
       </div>
     </div>
 
@@ -151,12 +192,26 @@
 
     // --- DOM ---------------------------------------------------------------
     const el = (id) => document.getElementById(id);
-    const outSignal = el("outSignal");
-    const inSignal = el("inSignal");
-    const btnHost = el("btnHost");
-    const btnJoin = el("btnJoin");
-    const btnFinish = el("btnFinish");
-    const btnCopy = el("btnCopy");
+
+    const roleView = el("roleView");
+    const hostView = el("hostView");
+    const joinerView = el("joinerView");
+
+    const btnPickHost = el("btnPickHost");
+    const btnPickJoiner = el("btnPickJoiner");
+
+    const hostOffer = el("hostOffer");
+    const hostAnswerIn = el("hostAnswerIn");
+    const btnHostCopy = el("btnHostCopy");
+    const btnHostFinish = el("btnHostFinish");
+    const btnHostBack = el("btnHostBack");
+
+    const joinerOfferIn = el("joinerOfferIn");
+    const joinerAnswer = el("joinerAnswer");
+    const btnJoinerCreate = el("btnJoinerCreate");
+    const btnJoinerCopy = el("btnJoinerCopy");
+    const btnJoinerBack = el("btnJoinerBack");
+
     const btnCounter = el("btnCounter");
     const logBox = el("log");
     const connState = el("connState");
@@ -170,6 +225,13 @@
     let counterRunning = false;
     let counterTimer = null;
     let n = 0;
+
+    // --- View switching ----------------------------------------------------
+    function showView(which) {
+      roleView.hidden = which !== "role";
+      hostView.hidden = which !== "host";
+      joinerView.hidden = which !== "joiner";
+    }
 
     // --- Logging -----------------------------------------------------------
     function log(msg, cls) {
@@ -242,12 +304,7 @@
       ch.addEventListener("message", (e) => logRecv(e.data));
     }
 
-    function publishSignal(desc) {
-      outSignal.value = JSON.stringify(desc);
-      btnCopy.disabled = false;
-    }
-
-    // Step 1 (host): create the offer.
+    // Host step 1: create the offer.
     async function host() {
       resetPeer();
       role = "host";
@@ -257,21 +314,21 @@
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       await waitForIceComplete(pc);
-      publishSignal(pc.localDescription);
-      log("Offer ready. Send your signal to the peer, then paste their answer below.");
-      btnFinish.disabled = false;
-      btnHost.disabled = true;
+      hostOffer.value = JSON.stringify(pc.localDescription);
+      btnHostCopy.disabled = false;
+      btnHostFinish.disabled = false;
+      log("Offer ready. Send it to the joiner, then paste their answer below.");
     }
 
-    // Step 2 (joiner): consume the offer, produce an answer.
+    // Joiner: consume the offer, produce an answer.
     async function join() {
-      const raw = inSignal.value.trim();
-      if (!raw) return log("Paste the host's signal first.", "err");
+      const raw = joinerOfferIn.value.trim();
+      if (!raw) return log("Paste the host's offer first.", "err");
       let offer;
       try { offer = JSON.parse(raw); }
-      catch { return log("Peer signal is not valid — copy the whole blob.", "err"); }
+      catch { return log("Offer is not valid — copy the whole blob.", "err"); }
       if (offer.type !== "offer") {
-        return log("Expected an offer here. (Are you the host? Use Finish connect instead.)", "err");
+        return log("Expected an offer here (paste the host's signal, not an answer).", "err");
       }
       resetPeer();
       role = "joiner";
@@ -282,26 +339,26 @@
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       await waitForIceComplete(pc);
-      publishSignal(pc.localDescription);
-      log("Answer ready. Send your signal back to the host — that's the last step for you.");
-      btnHost.disabled = true;
-      btnJoin.disabled = true;
+      joinerAnswer.value = JSON.stringify(pc.localDescription);
+      btnJoinerCopy.disabled = false;
+      btnJoinerCreate.disabled = true;
+      log("Answer ready. Send it back to the host — that's the last step for you.");
     }
 
-    // Step 3 (host): apply the joiner's answer.
+    // Host step 2: apply the joiner's answer.
     async function finish() {
       if (role !== "host" || !pc) return log("Only the host finishes the connection.", "err");
-      const raw = inSignal.value.trim();
-      if (!raw) return log("Paste the peer's answer first.", "err");
+      const raw = hostAnswerIn.value.trim();
+      if (!raw) return log("Paste the joiner's answer first.", "err");
       let answer;
       try { answer = JSON.parse(raw); }
-      catch { return log("Peer signal is not valid — copy the whole blob.", "err"); }
+      catch { return log("Answer is not valid — copy the whole blob.", "err"); }
       if (answer.type !== "answer") {
-        return log("Expected an answer here (the joiner's signal).", "err");
+        return log("Expected an answer here (the joiner's signal, not another offer).", "err");
       }
       await pc.setRemoteDescription(answer);
       log("Answer applied — establishing connection…");
-      btnFinish.disabled = true;
+      btnHostFinish.disabled = true;
     }
 
     function resetPeer() {
@@ -312,6 +369,17 @@
       btnCounter.textContent = "Send increasing number every second";
       if (channel) { try { channel.close(); } catch (_) {} channel = null; }
       if (pc) { try { pc.close(); } catch (_) {} pc = null; }
+      role = null;
+      // Clear each view's fields — they're not shared, so clear both.
+      hostOffer.value = "";
+      hostAnswerIn.value = "";
+      joinerOfferIn.value = "";
+      joinerAnswer.value = "";
+      btnHostCopy.disabled = true;
+      btnHostFinish.disabled = true;
+      btnJoinerCopy.disabled = true;
+      btnJoinerCreate.disabled = false;
+      setConnected(false);
     }
 
     // --- Counter (start / pause / resume) ----------------------------------
@@ -350,22 +418,40 @@
         : counterRunning ? "Pause counting" : "Resume counting";
     }
 
-    // --- Wire up UI --------------------------------------------------------
-    btnHost.addEventListener("click", () => host().catch((e) => log("Host error: " + e.message, "err")));
-    btnJoin.addEventListener("click", () => join().catch((e) => log("Join error: " + e.message, "err")));
-    btnFinish.addEventListener("click", () => finish().catch((e) => log("Finish error: " + e.message, "err")));
-    btnCounter.addEventListener("click", toggleCounter);
-    btnCopy.addEventListener("click", async () => {
+    async function copyText(source) {
       try {
-        await navigator.clipboard.writeText(outSignal.value);
-        log("Signal copied to clipboard.");
+        await navigator.clipboard.writeText(source.value);
+        log("Copied to clipboard.");
       } catch {
-        outSignal.select();
+        source.select();
         log("Clipboard blocked — select the field and copy manually.", "err");
       }
+    }
+
+    // --- Wire up UI --------------------------------------------------------
+    btnPickHost.addEventListener("click", () => {
+      showView("host");
+      host().catch((e) => log("Host error: " + e.message, "err"));
+    });
+    btnPickJoiner.addEventListener("click", () => {
+      resetPeer();
+      showView("joiner");
     });
 
-    log("Ready. Host a connection or join a peer to begin.");
+    btnHostBack.addEventListener("click", () => { resetPeer(); showView("role"); });
+    btnJoinerBack.addEventListener("click", () => { resetPeer(); showView("role"); });
+
+    btnJoinerCreate.addEventListener("click", () =>
+      join().catch((e) => log("Join error: " + e.message, "err")));
+    btnHostFinish.addEventListener("click", () =>
+      finish().catch((e) => log("Finish error: " + e.message, "err")));
+
+    btnHostCopy.addEventListener("click", () => copyText(hostOffer));
+    btnJoinerCopy.addEventListener("click", () => copyText(joinerAnswer));
+
+    btnCounter.addEventListener("click", toggleCounter);
+
+    log("Ready. Pick a role to begin.");
   })();
   </script>
 </body>
