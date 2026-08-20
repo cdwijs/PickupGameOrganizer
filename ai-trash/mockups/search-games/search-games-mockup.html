@@ -1,0 +1,285 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1080px; height:1920px; overflow:hidden; }
+  body { font-family:'DejaVu Sans','Liberation Sans',sans-serif;
+    background:#eef1f5; color:#0f172a; display:flex; flex-direction:column; }
+
+  .statusbar { height:56px; display:flex; align-items:center; justify-content:space-between;
+    padding:0 48px; font-size:26px; font-weight:700; }
+  .statusbar .dots { letter-spacing:3px; }
+  header { padding:12px 48px 4px; }
+  header h1 { font-size:56px; font-weight:700; letter-spacing:-1px; }
+
+  /* filters */
+  .filters { padding:14px 48px 6px; }
+  .searchbar { display:flex; align-items:center; gap:20px; background:#fff; border:2px solid #e2e8f0;
+    border-radius:24px; height:96px; padding:0 26px; }
+  .searchbar .si svg { width:44px; height:44px; color:#64748b; display:block; }
+  .searchbar .q { flex:1; font-size:34px; font-weight:600; color:#0f172a; }
+  .searchbar .q.ph { color:#a3adba; font-weight:500; }
+  .chips { display:flex; align-items:center; gap:16px; margin-top:18px; }
+  .filterbtn { width:70px; height:70px; border-radius:18px; background:#1d4ed8; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(29,78,216,.3); }
+  .filterbtn svg { width:38px; height:38px; color:#fff; }
+  .heartchip { gap:10px; }
+  .heartchip .hh { display:inline-flex; }
+  .heartchip .hh svg { width:34px; height:34px; color:#ef4444; }
+  .chip { display:flex; align-items:center; gap:12px; background:#fff; border:2px solid #e2e8f0;
+    border-radius:999px; padding:14px 24px; font-size:27px; font-weight:700; color:#334155; }
+  .chip svg { width:32px; height:32px; color:#94a3b8; }
+
+  .rescount { padding:20px 54px 6px; font-size:27px; font-weight:700; color:#64748b;
+    text-transform:uppercase; letter-spacing:1.5px; }
+
+  /* results */
+  .list { flex:1; padding:6px 48px 8px; display:flex; flex-direction:column; gap:30px;
+    overflow:hidden; }
+  .card { background:#fff; border:2px solid #e6ebf1; border-radius:32px; padding:34px 34px;
+    box-shadow:0 12px 30px rgba(15,23,42,.06); }
+  .top { display:flex; align-items:center; gap:26px; }
+  .ava { width:112px; height:112px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 8px 20px rgba(15,23,42,.18); }
+  .ava svg { width:64px; height:64px; color:#fff; }
+  .info { flex:1; min-width:0; }
+  .name { font-size:42px; font-weight:700; line-height:1.1; letter-spacing:-.5px; }
+  .when { font-size:30px; font-weight:700; color:#2563eb; margin-top:8px; }
+
+  .meta { display:flex; gap:40px; margin-top:24px; padding:0 4px; }
+  .meta .m { display:flex; align-items:center; gap:12px; font-size:29px; font-weight:600; color:#64748b; }
+  .meta .mi svg { width:38px; height:38px; color:#94a3b8; display:block; }
+
+  .acts { display:flex; gap:18px; margin-top:30px; }
+  /* go / not go segmented */
+  .seg { flex:1; display:flex; background:#f1f5f9; border:2px solid #e2e8f0; border-radius:20px;
+    padding:6px; gap:6px; }
+  .seg .opt { flex:1; height:76px; border-radius:15px; display:flex; align-items:center;
+    justify-content:center; gap:12px; font-size:30px; font-weight:700; color:#64748b; }
+  .seg .opt svg { width:36px; height:36px; display:block; }
+  .seg .opt.on { background:#16a34a; color:#fff; box-shadow:0 6px 14px rgba(22,163,74,.3); }
+  .seg .opt.on svg { color:#fff; }
+  .seg .opt.on-no { background:#fff; color:#334155; box-shadow:0 4px 10px rgba(15,23,42,.1); }
+  /* request to join */
+  .join { flex:1; height:88px; border-radius:20px; background:#1d4ed8; color:#fff;
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    font-size:31px; font-weight:700; box-shadow:0 10px 22px rgba(29,78,216,.32); }
+  .join svg { width:40px; height:40px; color:#fff; }
+  /* subscribe = heart */
+  .heartbtn { flex-shrink:0; align-self:flex-start; width:78px; height:78px; border-radius:20px;
+    background:#fff; border:2px solid #cbd5e1; display:flex; align-items:center; justify-content:center; }
+  .heartbtn svg { width:44px; height:44px; color:#94a3b8; display:block; }
+  .heartbtn.on { background:#fee2e2; border-color:#fecaca; }
+  .heartbtn.on svg { color:#ef4444; }
+
+  nav { height:150px; background:#fff; border-top:2px solid #e7ebf0;
+    display:flex; align-items:center; justify-content:space-around; padding-bottom:16px; }
+  nav .item { display:flex; flex-direction:column; align-items:center; gap:8px;
+    font-size:24px; font-weight:700; color:#94a3b8; }
+  nav .item.active { color:#16a34a; }
+  nav .item svg { width:44px; height:44px; }
+</style></head><body>
+  <div class="statusbar"><span>9:41</span><span class="dots">&#9679;&#9679;&#9679; &#9723;</span></div>
+  <header><h1>Search games</h1></header>
+
+  <div class="filters">
+    <div class="searchbar">
+      <span class="si"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="11" cy="11" r="7"/>
+  <line x1="16.2" y1="16.2" x2="21" y2="21"/>
+</svg>
+</span>
+      <span class="q ph">Search games</span>
+    </div>
+    <div class="chips">
+      <div class="filterbtn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4 5.5h16l-6.2 7.2v5.6l-3.6 1.7v-7.3L4 5.5z"/>
+</svg>
+</div>
+      <div class="chip heartchip"><span class="hh"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+</svg>
+</span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 9l7 7 7-7"/>
+</svg>
+</div>
+      <div class="chip"><span>Sport: Soccer</span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 9l7 7 7-7"/>
+</svg>
+</div><div class="chip"><span>≤ 10 km</span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 9l7 7 7-7"/>
+</svg>
+</div><div class="chip"><span>This week</span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 9l7 7 7-7"/>
+</svg>
+</div>
+    </div>
+  </div>
+
+  <div class="rescount">3 games found</div>
+
+  <div class="list">
+    
+      <div class="card">
+        <div class="top">
+          <div class="ava" style="background:#1d4ed8"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="9"/>
+  <polygon points="12,8.6 15.23,10.95 14.0,14.75 10.0,14.75 8.77,10.95" fill="currentColor" stroke="none"/>
+  <line x1="12" y1="8.6" x2="12" y2="3"/>
+  <line x1="15.23" y1="10.95" x2="20.56" y2="9.22"/>
+  <line x1="14.0" y1="14.75" x2="17.29" y2="19.28"/>
+  <line x1="10.0" y1="14.75" x2="6.71" y2="19.28"/>
+  <line x1="8.77" y1="10.95" x2="3.44" y2="9.22"/>
+  <polygon points="12,3 20.56,9.22 17.29,19.28 6.71,19.28 3.44,9.22" fill="none"/>
+</svg>
+</div>
+          <div class="info">
+            <div class="name">Terrible Football Haarlem</div>
+            <div class="when">Soccer &middot; Fri · 19:00</div>
+          </div>
+          <div class="heartbtn on"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+</svg>
+</div>
+        </div>
+        <div class="meta">
+          <span class="m"><span class="mi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 21.5s7-6.4 7-11.5a7 7 0 1 0-14 0c0 5.1 7 11.5 7 11.5z"/>
+  <circle cx="12" cy="10" r="2.7"/>
+</svg>
+</span>Haarlem · 2.3 km</span>
+          <span class="m"><span class="mi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="9" cy="8" r="3.4"/>
+  <path d="M2.5 20c0-3.7 2.9-6 6.5-6s6.5 2.3 6.5 6"/>
+  <path d="M16 5.2a3.4 3.4 0 0 1 0 6.4"/>
+  <path d="M17.5 14.2c2.6.5 4 2.6 4 5.8"/>
+</svg>
+</span>15/30 players</span>
+        </div>
+        <div class="acts">
+          <div class="seg">
+          <div class="opt on"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 12.5l4.2 4.3L19 6.5"/>
+</svg>
+<span>Go</span></div>
+          <div class="opt "><span>Not go</span></div>
+        </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="top">
+          <div class="ava" style="background:#d97706"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="3" y1="8.5" x2="21" y2="8.5"/>
+  <circle cx="12" cy="5.4" r="2.1" fill="currentColor" stroke="none"/>
+  <line x1="12" y1="8.5" x2="12" y2="14.5"/>
+  <line x1="12" y1="14.5" x2="9" y2="20"/>
+  <line x1="12" y1="14.5" x2="15" y2="20"/>
+</svg>
+</div>
+          <div class="info">
+            <div class="name">Club Foos</div>
+            <div class="when">Foosball &middot; Wed · 20:00</div>
+          </div>
+          <div class="heartbtn"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+</svg>
+</div>
+        </div>
+        <div class="meta">
+          <span class="m"><span class="mi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 21.5s7-6.4 7-11.5a7 7 0 1 0-14 0c0 5.1 7 11.5 7 11.5z"/>
+  <circle cx="12" cy="10" r="2.7"/>
+</svg>
+</span>Haarlem · 3.1 km</span>
+          <span class="m"><span class="mi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="9" cy="8" r="3.4"/>
+  <path d="M2.5 20c0-3.7 2.9-6 6.5-6s6.5 2.3 6.5 6"/>
+  <path d="M16 5.2a3.4 3.4 0 0 1 0 6.4"/>
+  <path d="M17.5 14.2c2.6.5 4 2.6 4 5.8"/>
+</svg>
+</span>7/12 players</span>
+        </div>
+        <div class="acts">
+          <div class="join"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="10" cy="8" r="3.7"/>
+  <path d="M3.4 20c0-3.7 3-6.2 6.6-6.2 1.1 0 2.1.2 3 .6"/>
+  <line x1="18.5" y1="13.5" x2="18.5" y2="20.5"/>
+  <line x1="15" y1="17" x2="22" y2="17"/>
+</svg>
+<span>Request to join</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="top">
+          <div class="ava" style="background:#16a34a"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="9"/>
+  <polygon points="12,8.6 15.23,10.95 14.0,14.75 10.0,14.75 8.77,10.95" fill="currentColor" stroke="none"/>
+  <line x1="12" y1="8.6" x2="12" y2="3"/>
+  <line x1="15.23" y1="10.95" x2="20.56" y2="9.22"/>
+  <line x1="14.0" y1="14.75" x2="17.29" y2="19.28"/>
+  <line x1="10.0" y1="14.75" x2="6.71" y2="19.28"/>
+  <line x1="8.77" y1="10.95" x2="3.44" y2="9.22"/>
+  <polygon points="12,3 20.56,9.22 17.29,19.28 6.71,19.28 3.44,9.22" fill="none"/>
+</svg>
+</div>
+          <div class="info">
+            <div class="name">Haarlem United</div>
+            <div class="when">Soccer &middot; Sun · 10:30</div>
+          </div>
+          <div class="heartbtn on"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+</svg>
+</div>
+        </div>
+        <div class="meta">
+          <span class="m"><span class="mi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 21.5s7-6.4 7-11.5a7 7 0 1 0-14 0c0 5.1 7 11.5 7 11.5z"/>
+  <circle cx="12" cy="10" r="2.7"/>
+</svg>
+</span>Haarlem · 5.0 km</span>
+          <span class="m"><span class="mi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="9" cy="8" r="3.4"/>
+  <path d="M2.5 20c0-3.7 2.9-6 6.5-6s6.5 2.3 6.5 6"/>
+  <path d="M16 5.2a3.4 3.4 0 0 1 0 6.4"/>
+  <path d="M17.5 14.2c2.6.5 4 2.6 4 5.8"/>
+</svg>
+</span>18/22 players</span>
+        </div>
+        <div class="acts">
+          <div class="join"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="10" cy="8" r="3.7"/>
+  <path d="M3.4 20c0-3.7 3-6.2 6.6-6.2 1.1 0 2.1.2 3 .6"/>
+  <line x1="18.5" y1="13.5" x2="18.5" y2="20.5"/>
+  <line x1="15" y1="17" x2="22" y2="17"/>
+</svg>
+<span>Request to join</span></div>
+        </div>
+      </div>
+  </div>
+
+  <nav>
+    <div class="item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="9" cy="8" r="3.4"/>
+  <path d="M2.5 20c0-3.7 2.9-6 6.5-6s6.5 2.3 6.5 6"/>
+  <path d="M16 5.2a3.4 3.4 0 0 1 0 6.4"/>
+  <path d="M17.5 14.2c2.6.5 4 2.6 4 5.8"/>
+</svg>
+<span>Agenda</span></div>
+    <div class="item active"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="11" cy="11" r="7"/>
+  <line x1="16.2" y1="16.2" x2="21" y2="21"/>
+</svg>
+<span>Search</span></div>
+    <div class="item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M18 9a6 6 0 1 0-12 0c0 4.6-2 6.2-2 6.2h16S18 13.6 18 9z"/>
+  <path d="M10.1 19a2 2 0 0 0 3.8 0"/>
+</svg>
+<span>Alerts</span></div>
+    <div class="item"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 21.5s7-6.4 7-11.5a7 7 0 1 0-14 0c0 5.1 7 11.5 7 11.5z"/>
+  <circle cx="12" cy="10" r="2.7"/>
+</svg>
+<span>Nearby</span></div>
+  </nav>
+</body></html>

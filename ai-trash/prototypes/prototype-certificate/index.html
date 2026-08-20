@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Signing Prototype</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <meta name="theme-color" content="#3b6ef0" />
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --panel: #ffffff;
+      --border: #d6d9de;
+      --text: #1c1e21;
+      --muted: #5c6470;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --ok: #2d9c4a;
+      --err: #d73a49;
+      --code-bg: #f0f2f5;
+      --measure: 560px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --ok: #3fb950;
+        --err: #ff7b72;
+        --code-bg: #23272f;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    header { max-width: var(--measure); margin: 0 auto 16px; }
+    header h1 { margin: 0 0 4px; font-size: 20px; }
+    header p { margin: 0; color: var(--muted); }
+    main { max-width: var(--measure); margin: 0 auto; display: grid; gap: 16px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      min-width: 0;
+    }
+    section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    section h2 .step {
+      display: inline-block;
+      min-width: 22px;
+      height: 22px;
+      line-height: 22px;
+      text-align: center;
+      background: var(--code-bg);
+      color: var(--muted);
+      border-radius: 4px;
+      font-size: 12px;
+      padding: 0 6px;
+    }
+    section h2 .pill { margin-left: auto; }
+    label {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 8px 0 3px;
+    }
+    button {
+      display: inline-block;
+      padding: 6px 12px;
+      margin: 4px 4px 4px 0;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: var(--accent-text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--panel); color: var(--text); }
+    button.danger { background: var(--panel); color: var(--err); border-color: var(--err); }
+    textarea, input[type="text"], select {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--code-bg);
+      color: var(--text);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      resize: vertical;
+    }
+    textarea { min-height: 60px; }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--code-bg);
+      color: var(--muted);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    .pill.ok { color: var(--ok); }
+    .pill.err { color: var(--err); }
+    .pill.time { font-variant-numeric: tabular-nums; }
+    pre.output {
+      margin: 6px 0 0;
+      padding: 8px 10px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+      max-height: 180px;
+      overflow: auto;
+    }
+    pre.output:empty::before { content: "—"; color: var(--muted); }
+    p.hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+    .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; }
+    .row .pill { font-size: 11px; }
+    #log {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 12px;
+      max-height: 160px;
+      overflow: auto;
+    }
+    #log div { white-space: pre-wrap; word-break: break-all; }
+    #log .ok { color: var(--ok); }
+    #log .err { color: var(--err); }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 4px 12px;
+      font-size: 12px;
+    }
+    .summary-grid .step-num { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .summary-grid .step-name { }
+    .summary-grid .step-ms {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .summary-grid .pending { color: var(--muted); }
+    .summary-grid .done { color: var(--ok); }
+    .summary-grid .fail { color: var(--err); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Signing Prototype</h1>
+    <p>Generate a public/private key pair in the browser, sign a message with the private key, and
+       verify the signature with the public key. Each step is a button; the time it takes is shown
+       next to it.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Algorithm</h2>
+      <p class="hint">
+        Pick the signature and hash algorithms below. Changing either resets everything
+        downstream, since the key material is bound to the algorithm.
+      </p>
+      <label for="sig-algo">Signature algorithm</label>
+      <select id="sig-algo">
+        <option value="ECDSA-P256">ECDSA — curve P-256</option>
+        <option value="ECDSA-P384">ECDSA — curve P-384</option>
+        <option value="ECDSA-P521">ECDSA — curve P-521</option>
+        <option value="RSA-PSS-2048">RSA-PSS — 2048-bit</option>
+        <option value="RSA-PSS-3072">RSA-PSS — 3072-bit</option>
+        <option value="RSA-PSS-4096">RSA-PSS — 4096-bit (slow keygen)</option>
+        <option value="RSASSA-PKCS1-2048">RSASSA-PKCS1-v1_5 — 2048-bit</option>
+        <option value="Ed25519">Ed25519</option>
+      </select>
+      <label for="hash-algo">Hash algorithm</label>
+      <select id="hash-algo">
+        <option value="SHA-256">SHA-256</option>
+        <option value="SHA-384">SHA-384</option>
+        <option value="SHA-512">SHA-512</option>
+        <option value="SHA-1">SHA-1 (legacy — do not use for new work)</option>
+      </select>
+      <p class="hint" id="algo-note">
+        Ed25519 uses SHA-512 internally and ignores the hash choice above (the explicit
+        <em>Hash message</em> step will still compute the selected digest as a
+        demonstration).
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="step">1</span> Generate key pair
+        <span id="s1-time" class="pill time">— ms</span>
+      </h2>
+      <p class="hint">
+        Creates a new key pair for the selected algorithm using the browser's
+        <code>SubtleCrypto</code>. The private key never leaves the page.
+      </p>
+      <div>
+        <button id="btn-gen">Generate</button>
+        <button id="btn-reset" class="secondary">Reset all</button>
+      </div>
+      <p class="hint" id="s1-status">No keys yet.</p>
+    </section>
+
+    <section>
+      <h2><span class="step">2</span> Export public key
+        <span id="s2-time" class="pill time">— ms</span>
+      </h2>
+      <p class="hint">
+        Exports the public key in <code>SPKI</code> (X.509 SubjectPublicKeyInfo) form, then base64s
+        it. This is what you would hand to a verifier.
+      </p>
+      <div>
+        <button id="btn-export-pub" disabled>Export public key</button>
+      </div>
+      <label>Public key (base64, SPKI DER)</label>
+      <pre class="output" id="pub-out"></pre>
+    </section>
+
+    <section>
+      <h2><span class="step">3</span> Export private key
+        <span id="s3-time" class="pill time">— ms</span>
+      </h2>
+      <p class="hint">
+        Shown for demonstration only. Exports the private key in <code>PKCS#8</code> form,
+        base64-encoded. In a real app you would keep this in <code>IndexedDB</code> as a
+        non-extractable <code>CryptoKey</code>, never as text.
+      </p>
+      <div>
+        <button id="btn-export-priv" disabled>Export private key</button>
+      </div>
+      <label>Private key (base64, PKCS#8 DER)</label>
+      <pre class="output" id="priv-out"></pre>
+    </section>
+
+    <section>
+      <h2><span class="step">4</span> Encode message
+        <span id="s4-time" class="pill time">— ms</span>
+      </h2>
+      <p class="hint">
+        Turns the text below into raw <code>UTF-8</code> bytes. Signing operates on bytes, not
+        strings — this step makes that explicit.
+      </p>
+      <label for="msg">Message to sign</label>
+      <textarea id="msg" spellcheck="false" autocapitalize="off" autocorrect="off">Hello from the signing prototype. This message will be encoded as UTF-8 bytes, hashed with the digest algorithm you selected above, then signed with the freshly generated private key using the signature algorithm also selected above. Anyone holding the matching public key can verify the signature; flipping a single bit of either causes verification to fail cleanly.</textarea>
+      <div>
+        <button id="btn-encode">Encode to bytes</button>
+      </div>
+      <label>Bytes (hex)</label>
+      <pre class="output" id="msg-hex"></pre>
+    </section>
+
+    <section>
+      <h2><span class="step">5</span> Hash message
+        <span id="s5-time" class="pill time">— ms</span>
+      </h2>
+      <p class="hint">
+        Computes <code>SHA-256</code> of the encoded bytes. ECDSA actually signs the digest, not
+        the raw message; the sign step below does this internally, but hashing it explicitly here
+        shows what is being signed.
+      </p>
+      <div>
+        <button id="btn-hash" disabled>Hash (SHA-256)</button>
+      </div>
+      <label>Digest (hex, 32 bytes)</label>
+      <pre class="output" id="hash-out"></pre>
+    </section>
+
+    <section>
+      <h2><span class="step">6</span> Sign
+        <span id="s6-time" class="pill time">— ms</span>
+      </h2>
+      <p class="hint">
+        Signs the encoded message with the private key using the selected algorithm.
+        The output size depends on the algorithm — 64 bytes for ECDSA/P-256 and Ed25519,
+        256 bytes for RSA-2048, and so on — and is shown here base64-encoded.
+      </p>
+      <div>
+        <button id="btn-sign" disabled>Sign</button>
+      </div>
+      <label>Signature (base64)</label>
+      <pre class="output" id="sig-out"></pre>
+    </section>
+
+    <section>
+      <h2><span class="step">7</span> Verify
+        <span id="s7-time" class="pill time">— ms</span>
+        <span id="s7-result" class="pill">not run</span>
+      </h2>
+      <p class="hint">
+        Verifies the signature against the encoded message using the <em>public</em> key. In a
+        real deployment the verifier would only ever have this key, never the private one.
+      </p>
+      <div>
+        <button id="btn-verify" disabled>Verify</button>
+      </div>
+    </section>
+
+    <section>
+      <h2><span class="step">8</span> Tamper test
+        <span id="s8-time" class="pill time">— ms</span>
+        <span id="s8-result" class="pill">not run</span>
+      </h2>
+      <p class="hint">
+        Flips one bit of the signature and re-verifies. Verification should return <code>false</code>
+        — this is the check that a signature actually protects the message.
+      </p>
+      <div>
+        <button id="btn-tamper" class="danger" disabled>Tamper &amp; re-verify</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Timing summary</h2>
+      <div class="summary-grid" id="summary">
+        <div class="step-num">1</div><div class="step-name">Generate key pair</div><div class="step-ms pending" data-step="1">—</div>
+        <div class="step-num">2</div><div class="step-name">Export public key</div><div class="step-ms pending" data-step="2">—</div>
+        <div class="step-num">3</div><div class="step-name">Export private key</div><div class="step-ms pending" data-step="3">—</div>
+        <div class="step-num">4</div><div class="step-name">Encode message</div><div class="step-ms pending" data-step="4">—</div>
+        <div class="step-num">5</div><div class="step-name">Hash message</div><div class="step-ms pending" data-step="5">—</div>
+        <div class="step-num">6</div><div class="step-name">Sign</div><div class="step-ms pending" data-step="6">—</div>
+        <div class="step-num">7</div><div class="step-name">Verify</div><div class="step-ms pending" data-step="7">—</div>
+        <div class="step-num">8</div><div class="step-name">Tamper test</div><div class="step-ms pending" data-step="8">—</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Log</h2>
+      <div id="log"></div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

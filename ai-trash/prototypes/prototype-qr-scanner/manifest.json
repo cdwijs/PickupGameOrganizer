@@ -1,0 +1,14 @@
+{
+  "name": "QR Scanner Prototype",
+  "short_name": "QR Scan",
+  "description": "Minimal PWA that reads a QR code with the device camera, shows the decoded content in an editable textbox, and re-encodes that text as a QR code.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14161a",
+  "theme_color": "#3b6ef0",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

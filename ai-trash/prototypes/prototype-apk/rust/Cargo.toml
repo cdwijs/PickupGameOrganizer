@@ -1,0 +1,40 @@
+[package]
+name = "arti-p2p-android"
+version = "0.1.0"
+edition = "2021"
+description = "JNI shared library: Arti onion-service P2P core for the Android prototype"
+license = "AGPL-3.0-or-later"
+
+[lib]
+name = "arti_p2p_android"
+crate-type = ["cdylib"]
+
+[dependencies]
+# JNI bridge
+jni = "0.21"
+once_cell = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Tor (Arti) — same pinned 0.37 family as the desktop prototype
+arti-client = { version = "0.37", default-features = false, features = [
+    "tokio",
+    "rustls",
+    "onion-service-client",
+    "onion-service-service",
+] }
+tor-rtcompat = { version = "0.37", default-features = false, features = ["tokio", "rustls"] }
+tor-hsservice = { version = "0.37", default-features = false }
+tor-hscrypto = { version = "0.37", default-features = false }
+tor-cell = { version = "0.37", default-features = false }
+
+# .onion address derivation
+sha3 = "0.10"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
