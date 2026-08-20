@@ -175,7 +175,14 @@ function renderRoster(parsed) {
 // tell app-added names from ones typed manually. Match is case-insensitive
 // and tolerates either form so a manually-added "Cedric" still reads as going.
 const APP_SUFFIX = ' (app)';
-function displayName(username) { return `${username}${APP_SUFFIX}`; }
+// Names go in capitalized ("cedric" -> "Cedric") so the roster reads the same
+// whether the username was typed lowercase or not. Hyphenated and multi-word
+// names get each part capitalized; the rest of the part is left as typed so
+// "McKay" survives.
+function capitalizeName(name) {
+  return name.replace(/[^\s'-]+/gu, (part) => part.charAt(0).toUpperCase() + part.slice(1));
+}
+function displayName(username) { return `${capitalizeName(username)}${APP_SUFFIX}`; }
 function isSameUser(slot, username) {
   const s = slot.toLowerCase();
   const u = username.toLowerCase();
