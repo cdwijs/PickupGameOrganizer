@@ -218,6 +218,20 @@
       </p>
     </section>
 
+    <!-- What came out of the blob. Only filled while this session still holds
+         the key: a restored session knows the username but not the password,
+         so after a reload this box is empty until the user signs in again. -->
+    <section>
+      <h2>Decrypted user data
+        <span id="plain-status" class="pill">—</span>
+      </h2>
+      <textarea id="plain-box" class="short" readonly placeholder="Nothing decrypted. Sign in to unlock a blob; the plaintext appears here."></textarea>
+      <p class="hint">
+        Read-only, and never stored in the clear — this is the plaintext held in
+        memory for the current sign-in.
+      </p>
+    </section>
+
     <!-- Two game cards. The date, weekday and player count are filled in from
          whatever the user pastes below. Tap the pill to toggle going / not going;
          the roster text is rewritten to add or remove your username. -->

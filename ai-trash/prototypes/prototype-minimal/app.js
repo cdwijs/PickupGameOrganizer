@@ -41,15 +41,16 @@ function makePlaintext(username) {
   return `${READABLE_PREFIX}: ${username}\n${USER_DATA_BODY}`;
 }
 
-// Split a decrypted plaintext back into { username, body }, or null when it
+// Split a decrypted plaintext into { username, body, text }, or null when it
 // doesn't carry the marker — i.e. when this wasn't the right key after all.
+// `text` is the plaintext verbatim, which is what the decrypted-data box shows.
 function parsePlaintext(text) {
   const head = `${READABLE_PREFIX}: `;
   if (!text.startsWith(head)) return null;
   const nl = text.indexOf('\n');
   const username = (nl === -1 ? text.slice(head.length) : text.slice(head.length, nl)).trim();
   if (!username) return null;
-  return { username, body: nl === -1 ? '' : text.slice(nl + 1) };
+  return { username, body: nl === -1 ? '' : text.slice(nl + 1), text };
 }
 
 // localStorage keys. The vault is one JSON array; the session names which blob
@@ -386,13 +387,13 @@ async function attemptSignIn(username, password, { interactive }) {
         alert('Created, but this browser would not store it — copy the vault '
           + 'out of the user-data box, it is gone on reload.');
       }
-      hit = { rec, username: username.trim(), body: USER_DATA_BODY };
+      hit = { rec, ...parsePlaintext(makePlaintext(username.trim())) };
     }
 
     // The stored spelling of the username is the canonical one.
     state.username = hit.username;
     state.userId = hit.rec.id;
-    state.userData = hit.body;
+    state.userData = hit.text;
     saveSession(hit.rec.id, hit.username);
     await storeCredential(hit.username, password);
     passwordInput.value = '';
@@ -640,7 +641,7 @@ const state = {
   time: '',
   username: '',
   userId: '',    // id of the open blob, so it can be deleted or re-found
-  userData: '',  // decrypted user data, only while signed in this session
+  userData: '',  // decrypted plaintext, only while signed in this session
 };
 
 const pasteIn = $('paste-in');
@@ -651,6 +652,8 @@ const userdataBox = $('userdata-box');
 const userdataStatus = $('userdata-status');
 const deleteUserBtn = $('delete-user');
 const deleteAllBtn = $('delete-all');
+const plainBox = $('plain-box');
+const plainStatus = $('plain-status');
 
 // The vault, shown so it can be copied to another device. The box is editable
 // — pasting records in merges them — so it is only rewritten while the user
@@ -669,6 +672,14 @@ function renderUserData() {
   }
   deleteUserBtn.disabled = !state.userId;
   deleteAllBtn.disabled = !users.length;
+
+  // The plaintext only exists while this session holds the password's key, so
+  // the box is empty after a reload even though the session survives it.
+  plainBox.value = state.userData;
+  plainStatus.className = state.userData ? 'pill ok' : 'pill';
+  plainStatus.textContent = state.userData
+    ? `${state.userData.length} chars`
+    : (state.username ? 'locked' : '—');
 }
 
 function render() {

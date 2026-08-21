@@ -56,6 +56,11 @@ public.
 password, and encrypts the username plus the user data under that key. The salt
 and the ciphertext are stored; the password never is.
 
+The *Decrypted user data* box below the vault shows the plaintext that came out
+of the blob — marker line, username and all. It is filled only while this
+session still holds the derived key, so it goes empty on reload even though the
+session itself survives (see *Deleting* and the notes below).
+
 ### Moving accounts between devices
 
 The *Encrypted user data* panel shows the whole vault as a JSON array. Copy it
@@ -194,11 +199,15 @@ are in the `prototype-qr-scanner` README under *Option 1*.
    rewrites itself. Tap **Going** to remove your name.
 8. Tap **Copy to clipboard** — paste the result into another chat as your
    reply.
-9. Reload. You stay signed in (the session is remembered); the vault pill drops
-   the *unlocked* note, because unlocking a blob again needs the password.
-10. Copy the vault, press **Delete this user**, then paste the vault back — the
+9. Watch **Decrypted user data** while you switch accounts — it shows that
+   user's plaintext, `Readable: <username>` line included, and clears on sign
+   out.
+10. Reload. You stay signed in (the session is remembered), but the vault pill
+    drops the *unlocked* note and the decrypted box goes empty — unlocking a
+    blob again needs the password.
+11. Copy the vault, press **Delete this user**, then paste the vault back — the
     deleted account returns and unlocks with its original password.
-11. Press **Delete all users**. The vault empties, you're signed out, and both
+12. Press **Delete all users**. The vault empties, you're signed out, and both
     red buttons go grey.
 
 ### Sample message
@@ -233,7 +242,7 @@ __________________________
 ## Files
 
 - `index.html` — markup, styling, and the sections (login, account, encrypted
-  user data, agenda, paste).
+  user data, decrypted user data, agenda, paste).
 - `app.js` — the encrypted-blob vault, sign-in and session handling, form
   handling, roster parser and rewriter, toggle logic, clipboard glue,
   service-worker registration.
@@ -257,6 +266,8 @@ __________________________
 - Key derivation takes a moment (310 000 PBKDF2 iterations, once per stored
   blob until one matches); the sign-in form disables itself and its button
   reads *Working…* while it runs.
+- The decrypted plaintext is never persisted: it lives in memory for the
+  current sign-in only, which is why the box is empty after a reload.
 - Two accounts can hold the same username as long as their passwords differ —
   the app cannot see a clash it has no key for. Whichever blob the password
   opens is the one you get.
