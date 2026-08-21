@@ -22,6 +22,7 @@ vault, and the vault can hold as many as you like:
 |-----|----------|
 | `prototype-minimal:users:v2` | `[{ id, saltHex, dataHex }, …]` — one entry per user |
 | `prototype-minimal:session:v2` | `{"id": …, "username": …}` — so a reload stays signed in |
+| `prototype-minimal:debug:v1` | `"1"` / `"0"` — are the diagnostic panels folded open |
 
 Each entry's `dataHex` is `nonce ‖ AES-GCM(key, plaintext)` over
 
@@ -72,6 +73,16 @@ Two things fill the box again after a reload:
   password re-derives the key for that one blob. A wrong one says *Incorrect
   password* and leaves the session alone — unlike a normal sign-in it never
   offers to create a user, because the account is known to exist here.
+
+### Showing and hiding the panels
+
+The **🔍🐛** button in the account row — between the status pill and
+*Sign in* / *Sign out* — folds the *Encrypted user data* and *Decrypted user
+data* panels away as one unit, down to the hint under *Unlock*. Nothing else on
+the page moves. They are what the prototype exists to show, but they are not
+what an app would put in front of a user, so they start folded and the choice is
+remembered in `localStorage`. The panels are kept up to date while folded, so
+opening them never shows something stale.
 
 ### Moving accounts between devices
 
@@ -193,38 +204,41 @@ are in the `prototype-qr-scanner` README under *Option 1*.
 
 ## What to try
 
-1. Press **Sign in** and submit with an empty password — a pop-up says the
+1. Press **🔍🐛** in the account row. The *Encrypted user data* and *Decrypted
+   user data* panels fold open — the rest of the walkthrough refers to them.
+   Press it again to fold them away; the choice survives a reload.
+2. Press **Sign in** and submit with an empty password — a pop-up says the
    password can not be empty. Same for an empty username.
-2. Sign in as `Cedric` with any password. The vault is empty, so the app says
+3. Sign in as `Cedric` with any password. The vault is empty, so the app says
    *"Incorrect username or password."* and then offers to create that user;
    accept, and it appears in the panel as one blob.
-3. Sign out and add `Teize` with a **different** password, then `Alex` with
+4. Sign out and add `Teize` with a **different** password, then `Alex` with
    **Cedric's** password. Three blobs, three separate accounts.
-4. Sign back in as each of them — no prompts. Try `Cedric` with Teize's
+5. Sign back in as each of them — no prompts. Try `Cedric` with Teize's
    password: *"Incorrect username or password."* Decline the create offer and
    nothing changes.
-5. Note that `cedric`, `CEDRIC` and `Cedric` all sign in, and the app shows the
+6. Note that `cedric`, `CEDRIC` and `Cedric` all sign in, and the app shows the
    spelling the account was created with.
-6. Paste the sample message below into **Paste roster**. The two cards should
+7. Paste the sample message below into **Paste roster**. The two cards should
    fill in with the two dates, the weekday, and the player count.
-7. Tap **Not going** on either card. Your username is appended into the first
+8. Tap **Not going** on either card. Your username is appended into the first
    empty slot (or a new slot if all are full) and the *Updated roster* box
    rewrites itself. Tap **Going** to remove your name.
-8. Tap **Copy to clipboard** — paste the result into another chat as your
+9. Tap **Copy to clipboard** — paste the result into another chat as your
    reply.
-9. Watch **Decrypted user data** while you switch accounts — it shows that
-   user's plaintext, `Readable: <username>` line included, and clears on sign
-   out.
-10. Reload. You stay signed in (the session is remembered). If the browser
+10. Watch **Decrypted user data** while you switch accounts — it shows that
+    user's plaintext, `Readable: <username>` line included, and clears on sign
+    out.
+11. Reload. You stay signed in (the session is remembered). If the browser
     saved the password, the decrypted box fills itself again with no prompt.
     Otherwise the vault pill drops its *unlocked* note, the decrypted box is
     empty with a *locked* pill, and an **Unlock** button appears under it —
     press it and enter the password to get the plaintext back. Get the password
     wrong and it says *Incorrect password*; you stay signed in and no second
     account is created.
-11. Copy the vault, press **Delete this user**, then paste the vault back — the
+12. Copy the vault, press **Delete this user**, then paste the vault back — the
     deleted account returns and unlocks with its original password.
-12. Press **Delete all users**. The vault empties, you're signed out, and both
+13. Press **Delete all users**. The vault empties, you're signed out, and both
     red buttons go grey.
 
 ### Sample message
@@ -242,14 +256,14 @@ __________________________
 🗓️ Friday 07.08.2026
 
 01. Teize
-02. Alex
+3. Alex
 
 __________________________
 
 🗓️ Monday 10.08.2026
 
 01. Teize
-02. Amine
+3. Amine
 03.
 04.
 
@@ -259,7 +273,8 @@ __________________________
 ## Files
 
 - `index.html` — markup, styling, and the sections (login, account, encrypted
-  user data, decrypted user data, agenda, paste).
+  user data, decrypted user data, agenda, paste). The two user-data sections
+  sit together in `#debug-panel`, which the 🔍🐛 button folds away.
 - `app.js` — the encrypted-blob vault, sign-in and session handling, form
   handling, roster parser and rewriter, toggle logic, clipboard glue,
   service-worker registration.

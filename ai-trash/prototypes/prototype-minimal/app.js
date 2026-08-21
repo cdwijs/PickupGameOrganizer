@@ -59,6 +59,9 @@ function parsePlaintext(text) {
 // password), so those keys are dropped on load.
 const LS_USERS = 'prototype-minimal:users:v2';
 const LS_SESSION = 'prototype-minimal:session:v2';
+// Whether the two diagnostic panels are folded open. A view preference, not
+// data — it is the one key here that survives a sign-out untouched.
+const LS_DEBUG = 'prototype-minimal:debug:v1';
 const LS_LEGACY = [
   'prototype-minimal:salt:v1',
   'prototype-minimal:userdata:v1',
@@ -686,6 +689,7 @@ const state = {
   username: '',
   userId: '',    // id of the open blob, so it can be deleted or re-found
   userData: '',  // decrypted plaintext, only while signed in this session
+  debug: lsGet(LS_DEBUG) === '1',  // are the diagnostic panels folded open?
 };
 
 const pasteIn = $('paste-in');
@@ -699,6 +703,8 @@ const deleteAllBtn = $('delete-all');
 const plainBox = $('plain-box');
 const plainStatus = $('plain-status');
 const plainUnlockBtn = $('plain-unlock');
+const debugPanel = $('debug-panel');
+const debugBtn = $('debug-btn');
 // The signed-out wording, kept so the locked variant can be swapped back out.
 const PLAIN_PLACEHOLDER = plainBox.placeholder;
 
@@ -737,8 +743,18 @@ function renderUserData() {
     : PLAIN_PLACEHOLDER;
 }
 
+// The magnifier+bug button and what it folds. Filled in either way: the boxes
+// inside are rendered whether or not they are on screen, so opening the panel
+// never shows stale contents.
+function renderDebug() {
+  debugPanel.hidden = !state.debug;
+  debugBtn.setAttribute('aria-expanded', String(state.debug));
+  debugBtn.classList.toggle('secondary', !state.debug);
+}
+
 function render() {
   renderAccount();
+  renderDebug();
   renderUserData();
   const username = state.username;
   normalizeUserSlots(state.parsed, username);
@@ -923,6 +939,12 @@ $('userdata-paste').addEventListener('click', async () => {
 });
 
 userdataBox.addEventListener('input', () => ingestRecordText(userdataBox.value));
+
+debugBtn.addEventListener('click', () => {
+  state.debug = !state.debug;
+  lsSet(LS_DEBUG, state.debug ? '1' : '0');
+  render();
+});
 
 // Unlock a restored-but-locked session: the username is already known, so the
 // sign-in form only needs the password. The session names the blob, so the

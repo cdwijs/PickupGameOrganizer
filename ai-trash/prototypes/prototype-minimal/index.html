@@ -178,6 +178,8 @@
     }
     .account-row .pill { margin: 0; }
     .account-row button { margin: 0; flex-shrink: 0; }
+    /* Emoji-only button: square-ish, and no letter-spacing between the two. */
+    .icon-btn { padding: 7px 10px; font-size: 17px; line-height: 1.2; letter-spacing: 0; }
     textarea::placeholder { white-space: pre-wrap; }
   </style>
 </head>
@@ -190,9 +192,20 @@
     <section>
       <div class="account-row">
         <span id="account-status" class="pill">not signed in</span>
+        <!-- Magnifier + bug: shows or hides the two diagnostic panels. They are
+             what the prototype is for, but they are not what an app would put
+             in front of a user, so they fold away. -->
+        <button type="button" id="debug-btn" class="icon-btn secondary"
+                aria-expanded="false" aria-controls="debug-panel"
+                title="Show or hide the encrypted and decrypted user data">🔍🐛</button>
         <button type="button" id="account-btn">Sign in</button>
       </div>
     </section>
+
+    <!-- Both diagnostic panels, folded away as one unit by the magnifier+bug
+         button in the account row: the encrypted vault and the plaintext that
+         came out of it, down to the hint under Unlock. -->
+    <div id="debug-panel" hidden>
 
     <!-- The vault: one entry per user, each { id, salt, AES-GCM blob }, hex.
          The username is inside the ciphertext, so nothing here says who these
@@ -237,6 +250,8 @@
         key, so it has to be unlocked again.
       </p>
     </section>
+
+    </div><!-- /#debug-panel -->
 
     <!-- Two game cards. The date, weekday and player count are filled in from
          whatever the user pastes below. Tap the pill to toggle going / not going;
