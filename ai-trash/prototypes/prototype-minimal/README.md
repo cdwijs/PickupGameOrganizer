@@ -58,8 +58,20 @@ and the ciphertext are stored; the password never is.
 
 The *Decrypted user data* box below the vault shows the plaintext that came out
 of the blob — marker line, username and all. It is filled only while this
-session still holds the derived key, so it goes empty on reload even though the
-session itself survives (see *Deleting* and the notes below).
+session still holds the derived key, and the key is not part of the session, so
+a reload starts out locked even though the session itself survives.
+
+Two things fill the box again after a reload:
+
+- On load the app asks the browser for a saved credential. When there is one for
+  the signed-in user and it carries the password, the key is re-derived silently
+  and the box is filled with no prompt. Chromium hands passwords back this way;
+  Firefox and Safari do not, so there the box stays locked.
+- Otherwise the box shows an **Unlock** button. It opens the sign-in form with
+  the username filled in and the cursor in the password field; the right
+  password re-derives the key for that one blob. A wrong one says *Incorrect
+  password* and leaves the session alone — unlike a normal sign-in it never
+  offers to create a user, because the account is known to exist here.
 
 ### Moving accounts between devices
 
@@ -92,8 +104,9 @@ for a real client; swapping it in means changing `KDF` in `app.js` and
 re-creating the blobs.
 
 Being a prototype, this is deliberately simple in ways a real client would not
-be: the restored session trusts `localStorage` instead of re-deriving the key,
-and the decrypted user data is not used for anything.
+be: the restored session trusts `localStorage` for who is signed in instead of
+re-deriving the key (the key is only re-derived to fill the decrypted box), and
+the decrypted user data is not used for anything.
 
 An earlier version stored a single blob under `…:salt:v1` / `…:userdata:v1`
 with no username inside it. Nothing here can open those (there is no way to
@@ -202,9 +215,13 @@ are in the `prototype-qr-scanner` README under *Option 1*.
 9. Watch **Decrypted user data** while you switch accounts — it shows that
    user's plaintext, `Readable: <username>` line included, and clears on sign
    out.
-10. Reload. You stay signed in (the session is remembered), but the vault pill
-    drops the *unlocked* note and the decrypted box goes empty — unlocking a
-    blob again needs the password.
+10. Reload. You stay signed in (the session is remembered). If the browser
+    saved the password, the decrypted box fills itself again with no prompt.
+    Otherwise the vault pill drops its *unlocked* note, the decrypted box is
+    empty with a *locked* pill, and an **Unlock** button appears under it —
+    press it and enter the password to get the plaintext back. Get the password
+    wrong and it says *Incorrect password*; you stay signed in and no second
+    account is created.
 11. Copy the vault, press **Delete this user**, then paste the vault back — the
     deleted account returns and unlocks with its original password.
 12. Press **Delete all users**. The vault empties, you're signed out, and both
@@ -267,7 +284,8 @@ __________________________
   blob until one matches); the sign-in form disables itself and its button
   reads *Working…* while it runs.
 - The decrypted plaintext is never persisted: it lives in memory for the
-  current sign-in only, which is why the box is empty after a reload.
+  current page load only, which is why a reload starts out locked and the key
+  has to come from a saved credential or from **Unlock**.
 - Two accounts can hold the same username as long as their passwords differ —
   the app cannot see a clash it has no key for. Whichever blob the password
   opens is the one you get.

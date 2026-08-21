@@ -315,13 +315,16 @@ const accountStatus = $('account-status');
 const accountBtn = $('account-btn');
 const signinSubmit = $('signin-submit');
 
-function showView(name) {
+// `focus` names the field to land on: 'username' for a fresh sign-in (so the
+// browser's auto-fill picker has somewhere to go), 'password' when the username
+// is already known and only the key is missing — the unlock case.
+function showView(name, { focus = 'username' } = {}) {
   const showSignin = name === 'signin';
   mainView.hidden = showSignin;
   signinView.hidden = !showSignin;
   if (showSignin) {
-    // Focus username so the browser's auto-fill picker has somewhere to land.
-    setTimeout(() => usernameInput.focus(), 0);
+    const field = focus === 'password' ? passwordInput : usernameInput;
+    setTimeout(() => field.focus(), 0);
   }
 }
 
@@ -367,11 +370,35 @@ function signOutLocal() {
 
 // The single sign-in path. `interactive` distinguishes a real form submit
 // (allowed to prompt) from the silent attempt made on load with a saved
-// credential (must never pop anything up).
-async function attemptSignIn(username, password, { interactive }) {
+// credential (must never pop anything up). `unlockId` names one blob to open
+// instead of searching the vault: the session already says which blob is ours,
+// it just lacks the key. That case knows the account exists, so a miss is
+// plainly a wrong password and creating a second blob for the same username
+// would be wrong.
+async function attemptSignIn(username, password, { interactive, unlockId = '' }) {
   setSigninBusy(true);
   try {
-    let hit = await findUser(username, password);
+    let hit;
+    if (unlockId) {
+      const rec = findUserById(unlockId);
+      if (!rec) {
+        // Deleted meanwhile, most likely from another tab. The session points
+        // at nothing, so drop it rather than blame the password.
+        signOutLocal();
+        showView('main');
+        render();
+        if (interactive) alert('That user was deleted on this device.');
+        return false;
+      }
+      const opened = await unlockRecord(password, rec);
+      if (!opened) {
+        if (interactive) alert('Incorrect password.');
+        return false;
+      }
+      hit = { rec, ...opened };
+    } else {
+      hit = await findUser(username, password);
+    }
 
     if (!hit) {
       // No blob in the vault opens with this pair. Whether the username is
@@ -408,6 +435,11 @@ async function attemptSignIn(username, password, { interactive }) {
   }
 }
 
+// Set while the form is open to unlock a known blob rather than to sign in:
+// holds that blob's id. Cleared whenever the form is opened or left any other
+// way, so a later ordinary sign-in is never restricted to it.
+let unlockTargetId = '';
+
 // The form is `novalidate` so an empty field reaches this handler instead of
 // being swallowed by the browser's own constraint bubble — the prototype wants
 // to say what's missing itself.
@@ -425,12 +457,16 @@ signinForm.addEventListener('submit', async (evt) => {
     passwordInput.focus();
     return;
   }
-  await attemptSignIn(username, password, { interactive: true });
+  const ok = await attemptSignIn(username, password, {
+    interactive: true, unlockId: unlockTargetId,
+  });
+  if (ok) unlockTargetId = '';
 });
 
 $('signin-cancel').addEventListener('click', () => {
   usernameInput.value = state.username;
   passwordInput.value = '';
+  unlockTargetId = '';
   showView('main');
 });
 
@@ -443,6 +479,7 @@ accountBtn.addEventListener('click', () => {
     // Leave usernameInput populated so the next sign-in has it pre-filled.
     render();
   } else {
+    unlockTargetId = '';
     showView('signin');
   }
 });
@@ -468,16 +505,23 @@ function restoreSession() {
 // once they open the sign-in view). When the credential carries a password and
 // this device has a record, use it to sign in silently; a failure just leaves
 // the fields filled in for a manual attempt.
+// It also runs when a session was restored: that session carries the username
+// but no key, so the credential is the only way to fill the decrypted box
+// without asking. In that case the credential must belong to the restored user
+// — silently switching accounts on a reload would be a surprise — and the
+// username field keeps the restored spelling.
 async function tryPrefill() {
   if (!navigator.credentials?.get) return;
   try {
     const cred = await navigator.credentials.get({ password: true, mediation: 'optional' });
     if (!cred?.id) return;
-    usernameInput.value = cred.id;
+    const restored = state.username;
+    if (restored && cred.id.trim().toLowerCase() !== restored.toLowerCase()) return;
+    if (!restored) usernameInput.value = cred.id;
     const password = 'password' in cred ? cred.password : '';
     if (password) passwordInput.value = password;
     if (password && loadUsers().length) {
-      await attemptSignIn(cred.id, password, { interactive: false });
+      await attemptSignIn(restored || cred.id, password, { interactive: false });
     }
   } catch { /* user dismissed, or no credential */ }
 }
@@ -654,6 +698,9 @@ const deleteUserBtn = $('delete-user');
 const deleteAllBtn = $('delete-all');
 const plainBox = $('plain-box');
 const plainStatus = $('plain-status');
+const plainUnlockBtn = $('plain-unlock');
+// The signed-out wording, kept so the locked variant can be swapped back out.
+const PLAIN_PLACEHOLDER = plainBox.placeholder;
 
 // The vault, shown so it can be copied to another device. The box is editable
 // — pasting records in merges them — so it is only rewritten while the user
@@ -674,12 +721,20 @@ function renderUserData() {
   deleteAllBtn.disabled = !users.length;
 
   // The plaintext only exists while this session holds the password's key, so
-  // the box is empty after a reload even though the session survives it.
+  // the box is empty after a reload even though the session survives it. That
+  // is what the unlock button is for: signed in, blob present, no key.
   plainBox.value = state.userData;
   plainStatus.className = state.userData ? 'pill ok' : 'pill';
   plainStatus.textContent = state.userData
     ? `${state.userData.length} chars`
     : (state.username ? 'locked' : '—');
+  const locked = Boolean(state.username) && !state.userData;
+  plainUnlockBtn.hidden = !locked;
+  // "Sign in to unlock" is wrong advice while already signed in — then the
+  // only thing missing is the password.
+  plainBox.placeholder = locked
+    ? 'Locked. Press Unlock and enter your password to see the plaintext.'
+    : PLAIN_PLACEHOLDER;
 }
 
 function render() {
@@ -869,6 +924,17 @@ $('userdata-paste').addEventListener('click', async () => {
 
 userdataBox.addEventListener('input', () => ingestRecordText(userdataBox.value));
 
+// Unlock a restored-but-locked session: the username is already known, so the
+// sign-in form only needs the password. The session names the blob, so the
+// submit re-derives the key for that one blob and the plaintext lands in the
+// box — see the unlockId branch in attemptSignIn.
+plainUnlockBtn.addEventListener('click', () => {
+  usernameInput.value = state.username;
+  passwordInput.value = '';
+  unlockTargetId = state.userId;
+  showView('signin', { focus: 'password' });
+});
+
 // Destructive, and there is no server-side copy to fall back on, so both ask
 // first and name what is about to go.
 deleteUserBtn.addEventListener('click', () => {
@@ -917,6 +983,8 @@ showView('main');
 dropLegacyStorage();
 restoreSession();
 render();
-// Only reach for a saved credential when the restored session didn't already
-// sign us in.
-if (!state.username) tryPrefill();
+// Always reach for a saved credential: without a session it signs us in, and
+// with a restored one it is what re-derives the key so the decrypted box is
+// filled instead of locked. render() runs again either way so the unlock
+// button reflects whether that worked.
+tryPrefill().then(render);

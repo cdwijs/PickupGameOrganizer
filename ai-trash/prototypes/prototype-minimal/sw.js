@@ -1,7 +1,7 @@
 // Cache-first service worker over the whole app shell. No CDN dependency, so
 // caching these files makes the app fully usable offline.
 
-const CACHE = 'minimal-shell-v6';
+const CACHE = 'minimal-shell-v7';
 const APP_SHELL = [
   './',
   './index.html',

@@ -219,16 +219,22 @@
     </section>
 
     <!-- What came out of the blob. Only filled while this session still holds
-         the key: a restored session knows the username but not the password,
-         so after a reload this box is empty until the user signs in again. -->
+         the key: a restored session knows the username but not the password.
+         On load the app first tries the browser's saved credential to re-derive
+         the key silently; when there is none, the Unlock button below asks for
+         the password instead. -->
     <section>
       <h2>Decrypted user data
         <span id="plain-status" class="pill">—</span>
       </h2>
       <textarea id="plain-box" class="short" readonly placeholder="Nothing decrypted. Sign in to unlock a blob; the plaintext appears here."></textarea>
+      <div class="paste-row">
+        <button type="button" id="plain-unlock" hidden>Unlock</button>
+      </div>
       <p class="hint">
         Read-only, and never stored in the clear — this is the plaintext held in
-        memory for the current sign-in.
+        memory for the current sign-in. A reload keeps the session but not the
+        key, so it has to be unlocked again.
       </p>
     </section>
 
