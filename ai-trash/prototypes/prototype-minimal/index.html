@@ -107,6 +107,8 @@
     button:hover:not(:disabled) { filter: brightness(1.1); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.secondary { background: var(--panel); color: var(--text); }
+    /* Destructive actions. Both confirm first — the blobs have no backup. */
+    button.danger { background: var(--err); border-color: var(--err); color: #fff; }
     button.wide { width: 100%; margin-top: 8px; }
     .pill {
       display: inline-block;
@@ -192,21 +194,27 @@
       </div>
     </section>
 
-    <!-- The encrypted user-data record: salt + AES-GCM blob, both hex. Copy it
-         to move the account to another device; paste one in to adopt it here.
-         The box is editable so a manual paste works as well as the button. -->
+    <!-- The vault: one entry per user, each { id, salt, AES-GCM blob }, hex.
+         The username is inside the ciphertext, so nothing here says who these
+         blobs belong to. Copy the vault to move accounts to another device;
+         paste entries in to merge them. The box is editable so a manual paste
+         works as well as the button. -->
     <section>
       <h2>Encrypted user data
-        <span id="userdata-status" class="pill">none stored</span>
+        <span id="userdata-status" class="pill">empty</span>
       </h2>
-      <textarea id="userdata-box" class="short" placeholder="No user data yet. Sign in and answer &quot;Create&quot; to generate it, or paste a record from another device here."></textarea>
+      <textarea id="userdata-box" class="short" placeholder="No users yet. Sign in and answer &quot;Create&quot; to add one, or paste blobs from another device here."></textarea>
       <div class="paste-row">
         <button type="button" id="userdata-copy">Copy to clipboard</button>
         <button type="button" id="userdata-paste" class="secondary">Paste from clipboard</button>
       </div>
+      <div class="paste-row">
+        <button type="button" id="delete-user" class="danger" disabled>Delete this user</button>
+        <button type="button" id="delete-all" class="danger" disabled>Delete all users</button>
+      </div>
       <p class="hint">
-        The salt and the encrypted blob travel together — a blob without its
-        salt cannot be decrypted. Nothing here reveals the password.
+        Each entry carries its own salt next to its blob — a blob without its
+        salt cannot be decrypted. Nothing here reveals a username or a password.
       </p>
     </section>
 
@@ -326,9 +334,9 @@
         <button type="button" id="signin-cancel" class="wide secondary">Cancel</button>
         <p class="hint">
           The browser should offer to save these credentials on submit, and
-          auto-fill them on a later visit. The password decrypts the stored
-          user-data record; if there is none — or it doesn't decrypt — the app
-          offers to create one.
+          auto-fill them on a later visit. Signing in tries every stored blob
+          with this password and keeps the one whose encrypted username matches;
+          if none does, the app offers to create a new user.
         </p>
       </form>
     </section>

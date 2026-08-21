@@ -1,7 +1,7 @@
 // Cache-first service worker over the whole app shell. No CDN dependency, so
 // caching these files makes the app fully usable offline.
 
-const CACHE = 'minimal-shell-v4';
+const CACHE = 'minimal-shell-v5';
 const APP_SHELL = [
   './',
   './index.html',
@@ -12,7 +12,12 @@ const APP_SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).catch(() => {})
+    // `cache: 'reload'` bypasses the HTTP cache while filling the shell cache;
+    // without it a revalidation-free hit can bake a stale file into a fresh
+    // cache generation, and the bumped CACHE name changes nothing on screen.
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(APP_SHELL.map((url) => new Request(url, { cache: 'reload' }))))
+      .catch(() => {})
   );
   self.skipWaiting();
 });

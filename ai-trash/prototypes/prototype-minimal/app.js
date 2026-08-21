@@ -1,5 +1,5 @@
-// Minimal prototype. Login form (pattern from prototype-password) backed by
-// password-derived encryption of a user-data record (pattern from
+// Minimal prototype. Login form (pattern from prototype-password) backed by a
+// vault of password-encrypted user blobs (pattern from
 // prototype-encrypted-userdata), two game cards, and a paste-and-parse
 // pipeline that keeps the updated roster in sync with the toggles.
 //
@@ -21,27 +21,55 @@
 
 const $ = (id) => document.getElementById(id);
 
-// ---- user data: storage + password-derived encryption --------------------
+// ---- user data: vault of password-encrypted blobs ------------------------
 
-// The record this prototype protects. Signing in means: derive a key from the
-// entered password plus the stored salt, decrypt the stored blob, and check
-// that the plaintext starts with "Readable" — that marker is what tells us the
-// password was right (AES-GCM would also have thrown, but the marker keeps the
-// check explicit, as specified).
-const USER_DATA = 'Readable: This is a placeholder for the user data';
+// One blob per user. Each blob is AES-GCM over this plaintext:
+//
+//   Readable: <username>
+//   This is a placeholder for the user data
+//
+// The username lives *inside* the ciphertext, so nothing stored in the clear
+// says who the blobs belong to. Signing in means trying every blob with the
+// entered password: the one that decrypts to a plaintext starting with
+// "Readable" and carrying the entered username is that user's blob. Anything
+// else is an incorrect username or password — the two are indistinguishable
+// from the outside, which is the point.
 const READABLE_PREFIX = 'Readable';
+const USER_DATA_BODY = 'This is a placeholder for the user data';
 
-// localStorage keys. Salt and blob are stored separately; the session record
-// only holds the username so a reload can stay signed in.
-const LS_SALT = 'prototype-minimal:salt:v1';
-const LS_DATA = 'prototype-minimal:userdata:v1';
-const LS_SESSION = 'prototype-minimal:session:v1';
+function makePlaintext(username) {
+  return `${READABLE_PREFIX}: ${username}\n${USER_DATA_BODY}`;
+}
+
+// Split a decrypted plaintext back into { username, body }, or null when it
+// doesn't carry the marker — i.e. when this wasn't the right key after all.
+function parsePlaintext(text) {
+  const head = `${READABLE_PREFIX}: `;
+  if (!text.startsWith(head)) return null;
+  const nl = text.indexOf('\n');
+  const username = (nl === -1 ? text.slice(head.length) : text.slice(head.length, nl)).trim();
+  if (!username) return null;
+  return { username, body: nl === -1 ? '' : text.slice(nl + 1) };
+}
+
+// localStorage keys. The vault is one JSON array; the session names which blob
+// is open. v1 stored a single salt/blob pair with no username inside it — that
+// cannot be migrated (there is no way to learn the username without the
+// password), so those keys are dropped on load.
+const LS_USERS = 'prototype-minimal:users:v2';
+const LS_SESSION = 'prototype-minimal:session:v2';
+const LS_LEGACY = [
+  'prototype-minimal:salt:v1',
+  'prototype-minimal:userdata:v1',
+  'prototype-minimal:session:v1',
+];
 
 // prototype-encrypted-userdata derives its KEK with Argon2id from hash-wasm,
 // which means a CDN download on first run. This prototype is an offline-first
 // PWA with no external dependency, so the same salt-plus-password derivation
 // is done with PBKDF2-SHA256 from WebCrypto instead. Everything else matches:
-// random salt, AES-GCM over the plaintext, nonce prefixed to the ciphertext.
+// random salt per blob, AES-GCM over the plaintext, nonce prefixed to the
+// ciphertext.
 const KDF = { name: 'PBKDF2-SHA256', iterations: 310000, hash: 'SHA-256' };
 const SALT_BYTES = 16;
 const NONCE_BYTES = 12;
@@ -66,7 +94,7 @@ function hexToBytes(hex) {
 }
 
 // localStorage throws in private-browsing modes and when the quota is full;
-// every access is wrapped so the prototype degrades to a session-only account.
+// every access is wrapped so the prototype degrades to a session-only vault.
 function lsGet(key) {
   try { return localStorage.getItem(key); } catch { return null; }
 }
@@ -77,43 +105,56 @@ function lsRemove(key) {
   try { localStorage.removeItem(key); } catch { /* nothing to do */ }
 }
 
-// The stored record: { saltHex, dataHex }, or null when this device has no
-// user data yet.
-function loadRecord() {
-  const saltHex = lsGet(LS_SALT);
-  const dataHex = lsGet(LS_DATA);
-  if (!saltHex || !dataHex) return null;
-  return { saltHex, dataHex };
+// A blob id only exists so the session and the delete buttons can point at one
+// blob. It is public, unlike everything else about the user.
+function newId() {
+  return bytesToHex(crypto.getRandomValues(new Uint8Array(8)));
 }
 
-// Returns false when the browser refused to store (private mode, quota) —
-// the account then only lasts for this page load, which the caller reports.
-function saveRecord(rec) {
-  return lsSet(LS_SALT, rec.saltHex) && lsSet(LS_DATA, rec.dataHex);
-}
+// ---- the vault -----------------------------------------------------------
 
-// Portable form, for copy-out and paste-in: salt and blob travel together,
-// because a blob without its salt cannot be decrypted anywhere else.
-function recordToText(rec) {
-  return JSON.stringify({
-    v: 1,
-    kdf: KDF.name,
-    iterations: KDF.iterations,
-    salt: rec.saltHex,
-    data: rec.dataHex,
-  }, null, 2);
-}
-
-// Parse a pasted record. Throws with a readable message on anything it can't
-// use — a mismatched KDF or iteration count would only surface later as a
-// decryption failure, which reads as "wrong password" and is worse.
-function textToRecord(text) {
-  let obj;
+// Records on disk: [{ id, saltHex, dataHex }, …]. Anything unparseable is
+// dropped rather than thrown, so one bad entry can't lock the app out.
+function loadUsers() {
+  const raw = lsGet(LS_USERS);
+  if (!raw) return [];
   try {
-    obj = JSON.parse(String(text).trim());
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter((r) => r && typeof r.saltHex === 'string' && typeof r.dataHex === 'string')
+      .map((r) => ({ id: typeof r.id === 'string' && r.id ? r.id : newId(), saltHex: r.saltHex, dataHex: r.dataHex }));
   } catch {
-    throw new Error('not valid JSON');
+    return [];
   }
+}
+
+// Returns false when the browser refused to store (private mode, quota) — the
+// vault then only lasts for this page load, which the caller reports.
+function saveUsers(users) {
+  return lsSet(LS_USERS, JSON.stringify(users));
+}
+
+function findUserById(id) {
+  return loadUsers().find((r) => r.id === id) || null;
+}
+
+// ---- portable form -------------------------------------------------------
+
+// What the copy button emits and the paste box accepts: the whole vault as a
+// JSON array. Salt and ciphertext travel together per entry, because a blob
+// without its salt cannot be decrypted anywhere.
+function recordToJson(rec) {
+  return { v: 2, kdf: KDF.name, iterations: KDF.iterations, id: rec.id, salt: rec.saltHex, data: rec.dataHex };
+}
+
+function vaultToText(users) {
+  return JSON.stringify(users.map(recordToJson), null, 2);
+}
+
+// Validate one entry. Throws with a readable message on anything unusable — a
+// mismatched KDF or iteration count would otherwise only surface later as a
+// failed decryption, which reads as "wrong password" and is worse.
+function recordFromJson(obj) {
   if (!obj || typeof obj !== 'object') throw new Error('not a record object');
   if (obj.kdf && obj.kdf !== KDF.name) throw new Error(`unsupported kdf "${obj.kdf}"`);
   if (obj.iterations && Number(obj.iterations) !== KDF.iterations) {
@@ -123,8 +164,48 @@ function textToRecord(text) {
   const data = hexToBytes(obj.data || '');
   if (salt.length !== SALT_BYTES) throw new Error(`salt must be ${SALT_BYTES} bytes`);
   if (data.length < NONCE_BYTES + 16) throw new Error('encrypted data is too short');
-  return { saltHex: bytesToHex(salt), dataHex: bytesToHex(data) };
+  return {
+    id: typeof obj.id === 'string' && /^[0-9a-f]{4,64}$/i.test(obj.id) ? obj.id.toLowerCase() : newId(),
+    saltHex: bytesToHex(salt),
+    dataHex: bytesToHex(data),
+  };
 }
+
+// Accepts a single record or an array of them.
+function textToRecords(text) {
+  let obj;
+  try {
+    obj = JSON.parse(String(text).trim());
+  } catch {
+    throw new Error('not valid JSON');
+  }
+  const list = Array.isArray(obj) ? obj : [obj];
+  if (!list.length) throw new Error('no records in there');
+  return list.map(recordFromJson);
+}
+
+// Merge pasted records into the vault: same id replaces (the same account,
+// re-encrypted), an identical salt+blob pair is a no-op, anything else is a
+// new user. Returns { added, replaced }.
+function mergeRecords(incoming) {
+  const users = loadUsers();
+  let added = 0;
+  let replaced = 0;
+  for (const rec of incoming) {
+    const byId = users.findIndex((r) => r.id === rec.id);
+    if (byId >= 0) {
+      if (users[byId].saltHex !== rec.saltHex || users[byId].dataHex !== rec.dataHex) replaced++;
+      users[byId] = rec;
+      continue;
+    }
+    if (users.some((r) => r.saltHex === rec.saltHex && r.dataHex === rec.dataHex)) continue;
+    users.push(rec);
+    added++;
+  }
+  return { stored: saveUsers(users), added, replaced, total: users.length };
+}
+
+// ---- crypto --------------------------------------------------------------
 
 async function deriveKey(password, saltBytes) {
   const base = await crypto.subtle.importKey(
@@ -139,25 +220,25 @@ async function deriveKey(password, saltBytes) {
   );
 }
 
-// Create: fresh random salt, key derived from it plus the password, user data
-// encrypted under that key. Returns the record; the caller stores it.
-async function createRecord(password) {
+// Create: fresh random salt, key derived from it plus the password, the
+// username and user data encrypted under that key. Returns the record; the
+// caller stores it.
+async function createRecord(username, password) {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const key = await deriveKey(password, salt);
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
-  const ct = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, textEnc.encode(USER_DATA))
-  );
+  const ct = new Uint8Array(await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce }, key, textEnc.encode(makePlaintext(username))
+  ));
   const envelope = new Uint8Array(nonce.length + ct.length);
   envelope.set(nonce, 0);
   envelope.set(ct, nonce.length);
-  return { saltHex: bytesToHex(salt), dataHex: bytesToHex(envelope) };
+  return { id: newId(), saltHex: bytesToHex(salt), dataHex: bytesToHex(envelope) };
 }
 
-// Unlock: returns the plaintext, or null when the password (or the record) is
-// wrong. A wrong password fails the AES-GCM authentication tag; a record that
-// decrypts to something that doesn't start with "Readable" is treated the same
-// way, so both paths end up at the same "user not found" prompt.
+// Unlock one blob: returns { username, body } on success, null when the
+// password doesn't fit this blob (failed AES-GCM tag) or the plaintext isn't
+// one of ours.
 async function unlockRecord(password, rec) {
   try {
     const salt = hexToBytes(rec.saltHex);
@@ -167,21 +248,36 @@ async function unlockRecord(password, rec) {
     const pt = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: envelope.slice(0, NONCE_BYTES) }, key, envelope.slice(NONCE_BYTES)
     );
-    const text = textDec.decode(pt);
-    return text.startsWith(READABLE_PREFIX) ? text : null;
+    return parsePlaintext(textDec.decode(pt));
   } catch {
     return null;
   }
 }
 
+// Find the blob that belongs to this username/password pair. Every blob has
+// its own salt, so there is no shortcut: each candidate costs one derivation.
+// Fine for the handful of users a phone would hold; a real client would key
+// the lookup on something public.
+//
+// The match is case-insensitive, and the *stored* spelling wins — sign in as
+// "cedric" on an account created as "Cedric" and the app calls you Cedric.
+async function findUser(username, password) {
+  const wanted = username.trim().toLowerCase();
+  for (const rec of loadUsers()) {
+    const opened = await unlockRecord(password, rec);
+    if (opened && opened.username.toLowerCase() === wanted) return { rec, ...opened };
+  }
+  return null;
+}
+
 // ---- session -------------------------------------------------------------
 
-// Staying signed in across reloads: the username is remembered, the password
-// is not. Re-deriving the key would need the password again, so a restored
-// session carries the username only — enough for the roster toggles, which is
-// all this prototype does with the account.
-function saveSession(username) {
-  lsSet(LS_SESSION, JSON.stringify({ username }));
+// Staying signed in across reloads: the open blob's id and its username are
+// remembered, the password is not. Re-deriving the key would need the password
+// again, so a restored session carries no plaintext — enough for the roster
+// toggles, which is all this prototype does with the account.
+function saveSession(id, username) {
+  lsSet(LS_SESSION, JSON.stringify({ id, username }));
 }
 
 function readSession() {
@@ -189,7 +285,9 @@ function readSession() {
   if (!raw) return null;
   try {
     const obj = JSON.parse(raw);
-    return obj && typeof obj.username === 'string' && obj.username ? obj : null;
+    if (!obj || typeof obj.username !== 'string' || !obj.username) return null;
+    if (typeof obj.id !== 'string' || !obj.id) return null;
+    return obj;
   } catch {
     return null;
   }
@@ -197,6 +295,12 @@ function readSession() {
 
 function clearSession() {
   lsRemove(LS_SESSION);
+}
+
+// v1 kept a single blob with no username in it. Nothing here can open it, so
+// it is cleared rather than left to rot in localStorage.
+function dropLegacyStorage() {
+  for (const key of LS_LEGACY) if (lsGet(key) !== null) lsRemove(key);
 }
 
 // ---- views + auth state --------------------------------------------------
@@ -250,31 +354,47 @@ function setSigninBusy(busy) {
   passwordInput.disabled = busy;
 }
 
+// Drop the signed-in state without touching the vault. Shared by the account
+// button and by both delete buttons.
+function signOutLocal() {
+  state.username = '';
+  state.userId = '';
+  state.userData = '';
+  passwordInput.value = '';
+  clearSession();
+}
+
 // The single sign-in path. `interactive` distinguishes a real form submit
 // (allowed to prompt) from the silent attempt made on load with a saved
 // credential (must never pop anything up).
 async function attemptSignIn(username, password, { interactive }) {
   setSigninBusy(true);
   try {
-    const rec = loadRecord();
-    let userData = rec ? await unlockRecord(password, rec) : null;
+    let hit = await findUser(username, password);
 
-    if (userData === null) {
-      // No record on this device, or it didn't decrypt to readable data.
+    if (!hit) {
+      // No blob in the vault opens with this pair. Whether the username is
+      // unknown or the password is wrong is not something the app can tell —
+      // and not something it should say.
       if (!interactive) return false;
-      if (!confirm('User not found. Create?')) return false;
-      const created = await createRecord(password);
-      if (!saveRecord(created) && interactive) {
-        alert('Created, but this browser would not store it — copy the record '
+      alert('Incorrect username or password.');
+      if (!confirm(`Create a new user "${username.trim()}" with this password?`)) return false;
+      const rec = await createRecord(username.trim(), password);
+      const users = loadUsers();
+      users.push(rec);
+      if (!saveUsers(users)) {
+        alert('Created, but this browser would not store it — copy the vault '
           + 'out of the user-data box, it is gone on reload.');
       }
-      userData = USER_DATA;
+      hit = { rec, username: username.trim(), body: USER_DATA_BODY };
     }
 
-    state.username = username;
-    state.userData = userData;
-    saveSession(username);
-    await storeCredential(username, password);
+    // The stored spelling of the username is the canonical one.
+    state.username = hit.username;
+    state.userId = hit.rec.id;
+    state.userData = hit.body;
+    saveSession(hit.rec.id, hit.username);
+    await storeCredential(hit.username, password);
     passwordInput.value = '';
     showView('main');
     render();
@@ -314,14 +434,11 @@ $('signin-cancel').addEventListener('click', () => {
 });
 
 // Account button: open the sign-in view when signed out, sign out when signed in.
-// Signing out drops the session but keeps the encrypted record — the whole
-// point is that it can be unlocked again with the same password.
+// Signing out drops the session but keeps the encrypted blob — the whole point
+// is that it can be unlocked again with the same password.
 accountBtn.addEventListener('click', () => {
   if (state.username) {
-    state.username = '';
-    state.userData = '';
-    passwordInput.value = '';
-    clearSession();
+    signOutLocal();
     // Leave usernameInput populated so the next sign-in has it pre-filled.
     render();
   } else {
@@ -330,16 +447,17 @@ accountBtn.addEventListener('click', () => {
 });
 
 // Restore the previous session so a reload stays signed in. Only meaningful
-// while the encrypted record is still there; without it there is nothing to
-// unlock and the session is dropped.
+// while that blob is still in the vault; if it was deleted (here or on another
+// tab) the session goes with it.
 function restoreSession() {
   const session = readSession();
   if (!session) return false;
-  if (!loadRecord()) {
+  if (!findUserById(session.id)) {
     clearSession();
     return false;
   }
   state.username = session.username;
+  state.userId = session.id;
   usernameInput.value = session.username;
   return true;
 }
@@ -357,7 +475,7 @@ async function tryPrefill() {
     usernameInput.value = cred.id;
     const password = 'password' in cred ? cred.password : '';
     if (password) passwordInput.value = password;
-    if (password && loadRecord()) {
+    if (password && loadUsers().length) {
       await attemptSignIn(cred.id, password, { interactive: false });
     }
   } catch { /* user dismissed, or no credential */ }
@@ -521,7 +639,8 @@ const state = {
   parsed: { lines: [], blocks: [] },
   time: '',
   username: '',
-  userData: '', // decrypted plaintext, only while signed in this session
+  userId: '',    // id of the open blob, so it can be deleted or re-found
+  userData: '',  // decrypted user data, only while signed in this session
 };
 
 const pasteIn = $('paste-in');
@@ -530,25 +649,26 @@ const parseStatus = $('parse-status');
 const outStatus = $('out-status');
 const userdataBox = $('userdata-box');
 const userdataStatus = $('userdata-status');
+const deleteUserBtn = $('delete-user');
+const deleteAllBtn = $('delete-all');
 
-// The encrypted record, shown so it can be copied to another device. The box
-// is editable — pasting a record in stores it — so it is only rewritten while
-// the user isn't typing in it.
+// The vault, shown so it can be copied to another device. The box is editable
+// — pasting records in merges them — so it is only rewritten while the user
+// isn't typing in it.
 function renderUserData() {
-  const rec = loadRecord();
+  const users = loadUsers();
   if (document.activeElement !== userdataBox) {
-    userdataBox.value = rec ? recordToText(rec) : '';
+    userdataBox.value = users.length ? vaultToText(users) : '';
   }
-  if (!rec) {
-    userdataStatus.className = 'pill';
-    userdataStatus.textContent = 'none stored';
-  } else if (state.userData) {
-    userdataStatus.className = 'pill ok';
-    userdataStatus.textContent = 'unlocked';
+  userdataStatus.className = users.length ? 'pill ok' : 'pill';
+  if (!users.length) {
+    userdataStatus.textContent = 'empty';
   } else {
-    userdataStatus.className = 'pill';
-    userdataStatus.textContent = 'stored, locked';
+    const n = `${users.length} blob${users.length === 1 ? '' : 's'}`;
+    userdataStatus.textContent = state.userData ? `${n} · unlocked` : n;
   }
+  deleteUserBtn.disabled = !state.userId;
+  deleteAllBtn.disabled = !users.length;
 }
 
 function render() {
@@ -676,8 +796,8 @@ $('copy-btn').addEventListener('click', async () => {
   outStatus.textContent = 'copied';
 });
 
-// User-data panel. Copy hands the record to another device; paste (button or
-// straight into the box) stores what came back. Storing a foreign record does
+// User-data panel. Copy hands the vault to another device; paste (button or
+// straight into the box) merges what came back. Storing a foreign blob does
 // not sign anyone in — the password still has to unlock it.
 $('userdata-copy').addEventListener('click', async () => {
   if (!userdataBox.value) return;
@@ -696,17 +816,24 @@ $('userdata-copy').addEventListener('click', async () => {
   userdataStatus.textContent = 'copied';
 });
 
-// Store whatever text claims to be a record; report why it was rejected.
+// Merge whatever text claims to be one or more records; report why it was
+// rejected. Clearing the box on its own deletes nothing — that's what the red
+// buttons are for.
 function ingestRecordText(text) {
   if (!String(text).trim()) {
     renderUserData();
     return false;
   }
   try {
-    saveRecord(textToRecord(text));
+    const result = mergeRecords(textToRecords(text));
     render();
     userdataStatus.className = 'pill ok';
-    userdataStatus.textContent = 'stored';
+    userdataStatus.textContent = result.added || result.replaced
+      ? `+${result.added} new, ${result.replaced} updated`
+      : 'already had those';
+    if (!result.stored) {
+      alert('This browser would not store the vault — it is gone on reload.');
+    }
     return true;
   } catch (err) {
     userdataStatus.className = 'pill err';
@@ -731,6 +858,28 @@ $('userdata-paste').addEventListener('click', async () => {
 
 userdataBox.addEventListener('input', () => ingestRecordText(userdataBox.value));
 
+// Destructive, and there is no server-side copy to fall back on, so both ask
+// first and name what is about to go.
+deleteUserBtn.addEventListener('click', () => {
+  if (!state.userId) return;
+  if (!confirm(`Delete the user "${state.username}"? Its encrypted blob is `
+    + 'removed from this device and cannot be recovered without a copy.')) return;
+  const left = loadUsers().filter((r) => r.id !== state.userId);
+  saveUsers(left);
+  signOutLocal();
+  render();
+});
+
+deleteAllBtn.addEventListener('click', () => {
+  const count = loadUsers().length;
+  if (!count) return;
+  if (!confirm(`Delete all ${count} user${count === 1 ? '' : 's'}? Every encrypted `
+    + 'blob on this device is removed and cannot be recovered without a copy.')) return;
+  saveUsers([]);
+  signOutLocal();
+  render();
+});
+
 // Card toggles: add or remove the signed-in user from the corresponding block.
 document.querySelectorAll('[data-toggle]').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -754,6 +903,7 @@ if ('serviceWorker' in navigator) {
 }
 
 showView('main');
+dropLegacyStorage();
 restoreSession();
 render();
 // Only reach for a saved credential when the restored session didn't already

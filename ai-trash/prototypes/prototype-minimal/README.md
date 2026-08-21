@@ -3,8 +3,8 @@
 A single-page PWA that stitches together ideas from the other prototypes:
 
 - A login form that the browser recognizes and offers to save (pattern from
-  [`prototype-password/`](../prototype-password/)), backed by a
-  password-encrypted user-data record (pattern from
+  [`prototype-password/`](../prototype-password/)), backed by a local vault of
+  password-encrypted user blobs (pattern from
   [`prototype-encrypted-userdata/`](../prototype-encrypted-userdata/)).
 - Two compact agenda cards (styling from
   [`mockups/agenda-view/`](../mockups/agenda-view/)) whose date, weekday and
@@ -15,41 +15,66 @@ A single-page PWA that stitches together ideas from the other prototypes:
 
 ## Accounts
 
-There is no server. An "account" is one record in `localStorage`:
+There is no server. Every account is one encrypted blob in a `localStorage`
+vault, and the vault can hold as many as you like:
 
 | key | contents |
 |-----|----------|
-| `prototype-minimal:salt:v1` | the 16-byte random salt, hex |
-| `prototype-minimal:userdata:v1` | `nonce ‖ AES-GCM(key, user data)`, hex |
-| `prototype-minimal:session:v1` | `{"username": …}` — so a reload stays signed in |
+| `prototype-minimal:users:v2` | `[{ id, saltHex, dataHex }, …]` — one entry per user |
+| `prototype-minimal:session:v2` | `{"id": …, "username": …}` — so a reload stays signed in |
 
-The protected plaintext is the fixed string
-`Readable: This is a placeholder for the user data`.
+Each entry's `dataHex` is `nonce ‖ AES-GCM(key, plaintext)` over
 
-**Signing in** derives a key from the entered password plus the stored salt and
-decrypts the record. Decryption counts as successful when the plaintext starts
-with `Readable`; the username is then simply taken from the form — the crypto
-proves the password, not the name.
+```
+Readable: <username>
+This is a placeholder for the user data
+```
+
+so **the username is inside the ciphertext**. Nothing stored in the clear says
+who the blobs belong to — only how many there are. The `id` is a random public
+label that exists so the session and the delete buttons can point at one blob.
+
+**Signing in** tries every blob in the vault with the entered password. A blob
+counts as the right one when it decrypts to a plaintext starting with
+`Readable` *and* the username on that line matches the one typed (comparison is
+case-insensitive; the stored spelling is the one the app then shows). Anything
+else — unknown username, wrong password, someone else's password — reports the
+same thing:
+
+> Incorrect username or password.
+
+and then offers to create a new user with the username and password just typed.
+Answering yes appends a new blob; it never overwrites an existing one, so two
+people can share a device, and even share a password.
+
+Each blob has its own salt, so there is no shortcut: a sign-in costs one key
+derivation per stored blob until it finds the match. Fine for the handful of
+users a phone would hold — a real client would key the lookup on something
+public.
 
 **Creating** generates a fresh 16-byte salt, derives a key from it and the
-password, and encrypts the user data under that key. The salt and the
-ciphertext are stored; the password never is.
+password, and encrypts the username plus the user data under that key. The salt
+and the ciphertext are stored; the password never is.
 
-If there is no record, or the record does not decrypt (wrong password, foreign
-record, corrupted blob), the app asks **"User not found. Create?"**. Answering
-yes creates a record with the password just typed and signs in with it —
-**which replaces whatever record was there**, so a mistyped password answered
-with "yes" discards the old account. That is the intended prototype behaviour;
-copy the record out first if you care about it.
+### Moving accounts between devices
 
-The *Encrypted user data* panel shows the record as one portable JSON blob
-(salt and ciphertext together — a blob without its salt cannot be decrypted
-anywhere). Copy it to move the account to another device; paste one in — with
-the button or straight into the box — to adopt it here. Adopting a record does
-not sign you in; the password still has to unlock it.
+The *Encrypted user data* panel shows the whole vault as a JSON array. Copy it
+to move accounts to another device; paste it — with the button or straight into
+the box — to merge it in. Entries are merged, not replaced: a matching `id`
+updates that entry, an identical salt/blob pair is ignored, anything else is
+added. A single record object pastes in as well as an array.
 
-To get back to the "no user data" state, clear the site data (DevTools →
-Application → Local storage, or `localStorage.clear()` in the console).
+Adopting a blob does not sign anyone in; the password still has to unlock it.
+Clearing the box deletes nothing.
+
+### Deleting
+
+Two red buttons, both of which confirm first and neither of which can be undone
+without a copy of the blob:
+
+- **Delete this user** — removes the blob the current session has open, and
+  signs out.
+- **Delete all users** — empties the vault and signs out.
 
 ### Key derivation
 
@@ -59,12 +84,15 @@ has no external dependency, so it does the same salt-plus-password derivation
 with **PBKDF2-SHA256, 310 000 iterations** from WebCrypto, then AES-GCM-256
 over the plaintext with a random 12-byte nonce. Argon2id is the better choice
 for a real client; swapping it in means changing `KDF` in `app.js` and
-re-creating the record.
+re-creating the blobs.
 
 Being a prototype, this is deliberately simple in ways a real client would not
-be: there is a single record rather than one per user, the restored session
-trusts `localStorage` instead of re-deriving the key, and the decrypted
-plaintext is not used for anything.
+be: the restored session trusts `localStorage` instead of re-deriving the key,
+and the decrypted user data is not used for anything.
+
+An earlier version stored a single blob under `…:salt:v1` / `…:userdata:v1`
+with no username inside it. Nothing here can open those (there is no way to
+learn the username without the password), so they are deleted on load.
 
 ## Run
 
@@ -149,24 +177,29 @@ are in the `prototype-qr-scanner` README under *Option 1*.
 
 1. Press **Sign in** and submit with an empty password — a pop-up says the
    password can not be empty. Same for an empty username.
-2. Sign in with any username and password. With no record stored yet the app
-   asks *"User not found. Create?"*; answer yes and it creates one, signs you
-   in, and shows the encrypted record.
-3. Sign out and sign back in with the **same** password — no prompt. Try a
-   **different** password — *"User not found. Create?"* again; answer no and
-   you stay signed out with the record untouched.
-4. Paste the sample message below into **Paste roster**. The two cards should
+2. Sign in as `Cedric` with any password. The vault is empty, so the app says
+   *"Incorrect username or password."* and then offers to create that user;
+   accept, and it appears in the panel as one blob.
+3. Sign out and add `Teize` with a **different** password, then `Alex` with
+   **Cedric's** password. Three blobs, three separate accounts.
+4. Sign back in as each of them — no prompts. Try `Cedric` with Teize's
+   password: *"Incorrect username or password."* Decline the create offer and
+   nothing changes.
+5. Note that `cedric`, `CEDRIC` and `Cedric` all sign in, and the app shows the
+   spelling the account was created with.
+6. Paste the sample message below into **Paste roster**. The two cards should
    fill in with the two dates, the weekday, and the player count.
-5. Tap **Not going** on either card. Your username is appended into the first
+7. Tap **Not going** on either card. Your username is appended into the first
    empty slot (or a new slot if all are full) and the *Updated roster* box
    rewrites itself. Tap **Going** to remove your name.
-6. Tap **Copy to clipboard** — paste the result into another chat as your
+8. Tap **Copy to clipboard** — paste the result into another chat as your
    reply.
-7. Reload. You stay signed in (the session is remembered); the record shows as
-   *stored, locked* because unlocking it again would need the password. The
-   toggles pick up your going status from whatever is currently pasted.
-8. Copy the record from **Encrypted user data**, clear local storage, paste it
-   back, and sign in with the original password — the same account is back.
+9. Reload. You stay signed in (the session is remembered); the vault pill drops
+   the *unlocked* note, because unlocking a blob again needs the password.
+10. Copy the vault, press **Delete this user**, then paste the vault back — the
+    deleted account returns and unlocks with its original password.
+11. Press **Delete all users**. The vault empties, you're signed out, and both
+    red buttons go grey.
 
 ### Sample message
 
@@ -199,11 +232,11 @@ __________________________
 
 ## Files
 
-- `index.html` — markup, styling, and the sections (login, account, user-data
-  record, agenda, paste).
-- `app.js` — user-data encryption and session handling, form handling, roster
-  parser and rewriter, toggle logic, clipboard glue, service-worker
-  registration.
+- `index.html` — markup, styling, and the sections (login, account, encrypted
+  user data, agenda, paste).
+- `app.js` — the encrypted-blob vault, sign-in and session handling, form
+  handling, roster parser and rewriter, toggle logic, clipboard glue,
+  service-worker registration.
 - `manifest.json` — PWA manifest; makes the page installable.
 - `sw.js` — cache-first service worker over the app shell. Bump `CACHE` when
   any shell file changes.
@@ -221,8 +254,12 @@ __________________________
   publish your reply.
 - The crypto needs a secure context (`https://`, `http://localhost`, or a
   `file://` page): without `crypto.subtle` the sign-in reports a failure.
-- Key derivation takes a moment (310 000 PBKDF2 iterations); the sign-in form
-  disables itself and its button reads *Working…* while it runs.
+- Key derivation takes a moment (310 000 PBKDF2 iterations, once per stored
+  blob until one matches); the sign-in form disables itself and its button
+  reads *Working…* while it runs.
+- Two accounts can hold the same username as long as their passwords differ —
+  the app cannot see a clash it has no key for. Whichever blob the password
+  opens is the one you get.
 - The Clipboard read requires user activation and a secure context; on
   browsers without `navigator.clipboard.readText` (or when it's denied) the
   button surfaces an error and the user can still paste manually into the
