@@ -1,10 +1,11 @@
 # Minimal Prototype
 
-A single-page PWA that stitches together three ideas from the other
-prototypes:
+A single-page PWA that stitches together ideas from the other prototypes:
 
 - A login form that the browser recognizes and offers to save (pattern from
-  [`prototype-password/`](../prototype-password/)).
+  [`prototype-password/`](../prototype-password/)), backed by a
+  password-encrypted user-data record (pattern from
+  [`prototype-encrypted-userdata/`](../prototype-encrypted-userdata/)).
 - Two compact agenda cards (styling from
   [`mockups/agenda-view/`](../mockups/agenda-view/)) whose date, weekday and
   player count are filled in from the roster the user pastes.
@@ -12,8 +13,58 @@ prototypes:
   box that regenerates it with the user's name added or removed — with
   clipboard read/write buttons and a *Going* / *Not going* toggle per game.
 
-The password is captured only so the browser saves it; the app does not
-otherwise use it.
+## Accounts
+
+There is no server. An "account" is one record in `localStorage`:
+
+| key | contents |
+|-----|----------|
+| `prototype-minimal:salt:v1` | the 16-byte random salt, hex |
+| `prototype-minimal:userdata:v1` | `nonce ‖ AES-GCM(key, user data)`, hex |
+| `prototype-minimal:session:v1` | `{"username": …}` — so a reload stays signed in |
+
+The protected plaintext is the fixed string
+`Readable: This is a placeholder for the user data`.
+
+**Signing in** derives a key from the entered password plus the stored salt and
+decrypts the record. Decryption counts as successful when the plaintext starts
+with `Readable`; the username is then simply taken from the form — the crypto
+proves the password, not the name.
+
+**Creating** generates a fresh 16-byte salt, derives a key from it and the
+password, and encrypts the user data under that key. The salt and the
+ciphertext are stored; the password never is.
+
+If there is no record, or the record does not decrypt (wrong password, foreign
+record, corrupted blob), the app asks **"User not found. Create?"**. Answering
+yes creates a record with the password just typed and signs in with it —
+**which replaces whatever record was there**, so a mistyped password answered
+with "yes" discards the old account. That is the intended prototype behaviour;
+copy the record out first if you care about it.
+
+The *Encrypted user data* panel shows the record as one portable JSON blob
+(salt and ciphertext together — a blob without its salt cannot be decrypted
+anywhere). Copy it to move the account to another device; paste one in — with
+the button or straight into the box — to adopt it here. Adopting a record does
+not sign you in; the password still has to unlock it.
+
+To get back to the "no user data" state, clear the site data (DevTools →
+Application → Local storage, or `localStorage.clear()` in the console).
+
+### Key derivation
+
+`prototype-encrypted-userdata` derives its key with Argon2id from `hash-wasm`,
+which means a CDN download on first run. This prototype is offline-first and
+has no external dependency, so it does the same salt-plus-password derivation
+with **PBKDF2-SHA256, 310 000 iterations** from WebCrypto, then AES-GCM-256
+over the plaintext with a random 12-byte nonce. Argon2id is the better choice
+for a real client; swapping it in means changing `KDF` in `app.js` and
+re-creating the record.
+
+Being a prototype, this is deliberately simple in ways a real client would not
+be: there is a single record rather than one per user, the restored session
+trusts `localStorage` instead of re-deriving the key, and the decrypted
+plaintext is not used for anything.
 
 ## Run
 
@@ -96,18 +147,26 @@ are in the `prototype-qr-scanner` README under *Option 1*.
 
 ## What to try
 
-1. Sign in with any username and password — the browser should offer to save
-   the credentials.
-2. Paste the sample message below into **Paste roster**. The two cards should
+1. Press **Sign in** and submit with an empty password — a pop-up says the
+   password can not be empty. Same for an empty username.
+2. Sign in with any username and password. With no record stored yet the app
+   asks *"User not found. Create?"*; answer yes and it creates one, signs you
+   in, and shows the encrypted record.
+3. Sign out and sign back in with the **same** password — no prompt. Try a
+   **different** password — *"User not found. Create?"* again; answer no and
+   you stay signed out with the record untouched.
+4. Paste the sample message below into **Paste roster**. The two cards should
    fill in with the two dates, the weekday, and the player count.
-3. Tap **Not going** on either card. Your username is appended into the first
+5. Tap **Not going** on either card. Your username is appended into the first
    empty slot (or a new slot if all are full) and the *Updated roster* box
    rewrites itself. Tap **Going** to remove your name.
-4. Tap **Copy to clipboard** — paste the result into another chat as your
+6. Tap **Copy to clipboard** — paste the result into another chat as your
    reply.
-5. Reload. The browser should offer the saved credential; the *Account* pill
-   shows who you're signed in as, and the toggles pick up your going status
-   from whatever is currently pasted.
+7. Reload. You stay signed in (the session is remembered); the record shows as
+   *stored, locked* because unlocking it again would need the password. The
+   toggles pick up your going status from whatever is currently pasted.
+8. Copy the record from **Encrypted user data**, clear local storage, paste it
+   back, and sign in with the original password — the same account is back.
 
 ### Sample message
 
@@ -140,9 +199,11 @@ __________________________
 
 ## Files
 
-- `index.html` — markup, styling, and the three sections (login, agenda, paste).
-- `app.js` — form handling, roster parser and rewriter, toggle logic,
-  clipboard glue, service-worker registration.
+- `index.html` — markup, styling, and the sections (login, account, user-data
+  record, agenda, paste).
+- `app.js` — user-data encryption and session handling, form handling, roster
+  parser and rewriter, toggle logic, clipboard glue, service-worker
+  registration.
 - `manifest.json` — PWA manifest; makes the page installable.
 - `sw.js` — cache-first service worker over the app shell. Bump `CACHE` when
   any shell file changes.
@@ -158,6 +219,10 @@ __________________________
 - Going / not-going is only a rewrite of the pasted text; nothing is sent
   anywhere. Copy the *Updated roster* back into the group chat to actually
   publish your reply.
+- The crypto needs a secure context (`https://`, `http://localhost`, or a
+  `file://` page): without `crypto.subtle` the sign-in reports a failure.
+- Key derivation takes a moment (310 000 PBKDF2 iterations); the sign-in form
+  disables itself and its button reads *Working…* while it runs.
 - The Clipboard read requires user activation and a secure context; on
   browsers without `navigator.clipboard.readText` (or when it's denied) the
   button surfaces an error and the user can still paste manually into the

@@ -1,6 +1,7 @@
-// Minimal prototype. Login form (pattern from prototype-password), two game
-// cards, and a paste-and-parse pipeline that keeps the updated roster in sync
-// with the toggles.
+// Minimal prototype. Login form (pattern from prototype-password) backed by
+// password-derived encryption of a user-data record (pattern from
+// prototype-encrypted-userdata), two game cards, and a paste-and-parse
+// pipeline that keeps the updated roster in sync with the toggles.
 //
 // Roster grammar (informal), from the example message:
 //   header lines...
@@ -20,6 +21,184 @@
 
 const $ = (id) => document.getElementById(id);
 
+// ---- user data: storage + password-derived encryption --------------------
+
+// The record this prototype protects. Signing in means: derive a key from the
+// entered password plus the stored salt, decrypt the stored blob, and check
+// that the plaintext starts with "Readable" — that marker is what tells us the
+// password was right (AES-GCM would also have thrown, but the marker keeps the
+// check explicit, as specified).
+const USER_DATA = 'Readable: This is a placeholder for the user data';
+const READABLE_PREFIX = 'Readable';
+
+// localStorage keys. Salt and blob are stored separately; the session record
+// only holds the username so a reload can stay signed in.
+const LS_SALT = 'prototype-minimal:salt:v1';
+const LS_DATA = 'prototype-minimal:userdata:v1';
+const LS_SESSION = 'prototype-minimal:session:v1';
+
+// prototype-encrypted-userdata derives its KEK with Argon2id from hash-wasm,
+// which means a CDN download on first run. This prototype is an offline-first
+// PWA with no external dependency, so the same salt-plus-password derivation
+// is done with PBKDF2-SHA256 from WebCrypto instead. Everything else matches:
+// random salt, AES-GCM over the plaintext, nonce prefixed to the ciphertext.
+const KDF = { name: 'PBKDF2-SHA256', iterations: 310000, hash: 'SHA-256' };
+const SALT_BYTES = 16;
+const NONCE_BYTES = 12;
+
+const textEnc = new TextEncoder();
+const textDec = new TextDecoder();
+
+function bytesToHex(bytes) {
+  let out = '';
+  for (const b of bytes) out += b.toString(16).padStart(2, '0');
+  return out;
+}
+
+function hexToBytes(hex) {
+  const clean = String(hex).trim().replace(/\s+/g, '');
+  if (!clean) throw new Error('hex string is empty');
+  if (clean.length % 2) throw new Error('hex string has an odd length');
+  if (!/^[0-9a-f]+$/i.test(clean)) throw new Error('hex string has non-hex characters');
+  const out = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = parseInt(clean.substr(i * 2, 2), 16);
+  return out;
+}
+
+// localStorage throws in private-browsing modes and when the quota is full;
+// every access is wrapped so the prototype degrades to a session-only account.
+function lsGet(key) {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+function lsSet(key, value) {
+  try { localStorage.setItem(key, value); return true; } catch { return false; }
+}
+function lsRemove(key) {
+  try { localStorage.removeItem(key); } catch { /* nothing to do */ }
+}
+
+// The stored record: { saltHex, dataHex }, or null when this device has no
+// user data yet.
+function loadRecord() {
+  const saltHex = lsGet(LS_SALT);
+  const dataHex = lsGet(LS_DATA);
+  if (!saltHex || !dataHex) return null;
+  return { saltHex, dataHex };
+}
+
+// Returns false when the browser refused to store (private mode, quota) —
+// the account then only lasts for this page load, which the caller reports.
+function saveRecord(rec) {
+  return lsSet(LS_SALT, rec.saltHex) && lsSet(LS_DATA, rec.dataHex);
+}
+
+// Portable form, for copy-out and paste-in: salt and blob travel together,
+// because a blob without its salt cannot be decrypted anywhere else.
+function recordToText(rec) {
+  return JSON.stringify({
+    v: 1,
+    kdf: KDF.name,
+    iterations: KDF.iterations,
+    salt: rec.saltHex,
+    data: rec.dataHex,
+  }, null, 2);
+}
+
+// Parse a pasted record. Throws with a readable message on anything it can't
+// use — a mismatched KDF or iteration count would only surface later as a
+// decryption failure, which reads as "wrong password" and is worse.
+function textToRecord(text) {
+  let obj;
+  try {
+    obj = JSON.parse(String(text).trim());
+  } catch {
+    throw new Error('not valid JSON');
+  }
+  if (!obj || typeof obj !== 'object') throw new Error('not a record object');
+  if (obj.kdf && obj.kdf !== KDF.name) throw new Error(`unsupported kdf "${obj.kdf}"`);
+  if (obj.iterations && Number(obj.iterations) !== KDF.iterations) {
+    throw new Error(`unsupported iteration count ${obj.iterations}`);
+  }
+  const salt = hexToBytes(obj.salt || '');
+  const data = hexToBytes(obj.data || '');
+  if (salt.length !== SALT_BYTES) throw new Error(`salt must be ${SALT_BYTES} bytes`);
+  if (data.length < NONCE_BYTES + 16) throw new Error('encrypted data is too short');
+  return { saltHex: bytesToHex(salt), dataHex: bytesToHex(data) };
+}
+
+async function deriveKey(password, saltBytes) {
+  const base = await crypto.subtle.importKey(
+    'raw', textEnc.encode(password), 'PBKDF2', false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: saltBytes, iterations: KDF.iterations, hash: KDF.hash },
+    base,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+// Create: fresh random salt, key derived from it plus the password, user data
+// encrypted under that key. Returns the record; the caller stores it.
+async function createRecord(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const key = await deriveKey(password, salt);
+  const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
+  const ct = new Uint8Array(
+    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce }, key, textEnc.encode(USER_DATA))
+  );
+  const envelope = new Uint8Array(nonce.length + ct.length);
+  envelope.set(nonce, 0);
+  envelope.set(ct, nonce.length);
+  return { saltHex: bytesToHex(salt), dataHex: bytesToHex(envelope) };
+}
+
+// Unlock: returns the plaintext, or null when the password (or the record) is
+// wrong. A wrong password fails the AES-GCM authentication tag; a record that
+// decrypts to something that doesn't start with "Readable" is treated the same
+// way, so both paths end up at the same "user not found" prompt.
+async function unlockRecord(password, rec) {
+  try {
+    const salt = hexToBytes(rec.saltHex);
+    const envelope = hexToBytes(rec.dataHex);
+    if (envelope.length < NONCE_BYTES + 16) return null;
+    const key = await deriveKey(password, salt);
+    const pt = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: envelope.slice(0, NONCE_BYTES) }, key, envelope.slice(NONCE_BYTES)
+    );
+    const text = textDec.decode(pt);
+    return text.startsWith(READABLE_PREFIX) ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---- session -------------------------------------------------------------
+
+// Staying signed in across reloads: the username is remembered, the password
+// is not. Re-deriving the key would need the password again, so a restored
+// session carries the username only — enough for the roster toggles, which is
+// all this prototype does with the account.
+function saveSession(username) {
+  lsSet(LS_SESSION, JSON.stringify({ username }));
+}
+
+function readSession() {
+  const raw = lsGet(LS_SESSION);
+  if (!raw) return null;
+  try {
+    const obj = JSON.parse(raw);
+    return obj && typeof obj.username === 'string' && obj.username ? obj : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  lsRemove(LS_SESSION);
+}
+
 // ---- views + auth state --------------------------------------------------
 
 const mainView = $('main-view');
@@ -29,6 +208,7 @@ const usernameInput = $('signin-username');
 const passwordInput = $('signin-password');
 const accountStatus = $('account-status');
 const accountBtn = $('account-btn');
+const signinSubmit = $('signin-submit');
 
 function showView(name) {
   const showSignin = name === 'signin';
@@ -61,16 +241,70 @@ async function storeCredential(username, password) {
   } catch { /* browser will still fall back to its form-save heuristic */ }
 }
 
+// Derivation takes a moment (PBKDF2, 310k iterations), so the form is locked
+// while it runs — otherwise a double-tap starts a second derivation.
+function setSigninBusy(busy) {
+  signinSubmit.disabled = busy;
+  signinSubmit.textContent = busy ? 'Working…' : 'Sign in';
+  usernameInput.disabled = busy;
+  passwordInput.disabled = busy;
+}
+
+// The single sign-in path. `interactive` distinguishes a real form submit
+// (allowed to prompt) from the silent attempt made on load with a saved
+// credential (must never pop anything up).
+async function attemptSignIn(username, password, { interactive }) {
+  setSigninBusy(true);
+  try {
+    const rec = loadRecord();
+    let userData = rec ? await unlockRecord(password, rec) : null;
+
+    if (userData === null) {
+      // No record on this device, or it didn't decrypt to readable data.
+      if (!interactive) return false;
+      if (!confirm('User not found. Create?')) return false;
+      const created = await createRecord(password);
+      if (!saveRecord(created) && interactive) {
+        alert('Created, but this browser would not store it — copy the record '
+          + 'out of the user-data box, it is gone on reload.');
+      }
+      userData = USER_DATA;
+    }
+
+    state.username = username;
+    state.userData = userData;
+    saveSession(username);
+    await storeCredential(username, password);
+    passwordInput.value = '';
+    showView('main');
+    render();
+    return true;
+  } catch (err) {
+    if (interactive) alert(`Sign in failed: ${err.message || err}`);
+    return false;
+  } finally {
+    setSigninBusy(false);
+  }
+}
+
+// The form is `novalidate` so an empty field reaches this handler instead of
+// being swallowed by the browser's own constraint bubble — the prototype wants
+// to say what's missing itself.
 signinForm.addEventListener('submit', async (evt) => {
   evt.preventDefault();
-  const fd = new FormData(signinForm);
-  const username = String(fd.get('username') || '').trim();
-  const password = String(fd.get('password') || '');
-  if (!username) return;
-  state.username = username;
-  await storeCredential(username, password);
-  showView('main');
-  render();
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value;
+  if (!username) {
+    alert('Username can not be empty.');
+    usernameInput.focus();
+    return;
+  }
+  if (!password) {
+    alert('Password can not be empty.');
+    passwordInput.focus();
+    return;
+  }
+  await attemptSignIn(username, password, { interactive: true });
 });
 
 $('signin-cancel').addEventListener('click', () => {
@@ -80,10 +314,14 @@ $('signin-cancel').addEventListener('click', () => {
 });
 
 // Account button: open the sign-in view when signed out, sign out when signed in.
+// Signing out drops the session but keeps the encrypted record — the whole
+// point is that it can be unlocked again with the same password.
 accountBtn.addEventListener('click', () => {
   if (state.username) {
     state.username = '';
+    state.userData = '';
     passwordInput.value = '';
+    clearSession();
     // Leave usernameInput populated so the next sign-in has it pre-filled.
     render();
   } else {
@@ -91,18 +329,36 @@ accountBtn.addEventListener('click', () => {
   }
 });
 
+// Restore the previous session so a reload stays signed in. Only meaningful
+// while the encrypted record is still there; without it there is nothing to
+// unlock and the session is dropped.
+function restoreSession() {
+  const session = readSession();
+  if (!session) return false;
+  if (!loadRecord()) {
+    clearSession();
+    return false;
+  }
+  state.username = session.username;
+  usernameInput.value = session.username;
+  return true;
+}
+
 // Offer any saved credential on load (Chromium — Firefox/Safari fall back to
 // the browser's own auto-fill picker on the input, which the user sees only
-// once they open the sign-in view).
+// once they open the sign-in view). When the credential carries a password and
+// this device has a record, use it to sign in silently; a failure just leaves
+// the fields filled in for a manual attempt.
 async function tryPrefill() {
   if (!navigator.credentials?.get) return;
   try {
     const cred = await navigator.credentials.get({ password: true, mediation: 'optional' });
-    if (cred?.id) {
-      usernameInput.value = cred.id;
-      if ('password' in cred && cred.password) passwordInput.value = cred.password;
-      state.username = cred.id;
-      render();
+    if (!cred?.id) return;
+    usernameInput.value = cred.id;
+    const password = 'password' in cred ? cred.password : '';
+    if (password) passwordInput.value = password;
+    if (password && loadRecord()) {
+      await attemptSignIn(cred.id, password, { interactive: false });
     }
   } catch { /* user dismissed, or no credential */ }
 }
@@ -265,15 +521,39 @@ const state = {
   parsed: { lines: [], blocks: [] },
   time: '',
   username: '',
+  userData: '', // decrypted plaintext, only while signed in this session
 };
 
 const pasteIn = $('paste-in');
 const pasteOut = $('paste-out');
 const parseStatus = $('parse-status');
 const outStatus = $('out-status');
+const userdataBox = $('userdata-box');
+const userdataStatus = $('userdata-status');
+
+// The encrypted record, shown so it can be copied to another device. The box
+// is editable — pasting a record in stores it — so it is only rewritten while
+// the user isn't typing in it.
+function renderUserData() {
+  const rec = loadRecord();
+  if (document.activeElement !== userdataBox) {
+    userdataBox.value = rec ? recordToText(rec) : '';
+  }
+  if (!rec) {
+    userdataStatus.className = 'pill';
+    userdataStatus.textContent = 'none stored';
+  } else if (state.userData) {
+    userdataStatus.className = 'pill ok';
+    userdataStatus.textContent = 'unlocked';
+  } else {
+    userdataStatus.className = 'pill';
+    userdataStatus.textContent = 'stored, locked';
+  }
+}
 
 function render() {
   renderAccount();
+  renderUserData();
   const username = state.username;
   normalizeUserSlots(state.parsed, username);
   const blocks = state.parsed.blocks;
@@ -396,6 +676,61 @@ $('copy-btn').addEventListener('click', async () => {
   outStatus.textContent = 'copied';
 });
 
+// User-data panel. Copy hands the record to another device; paste (button or
+// straight into the box) stores what came back. Storing a foreign record does
+// not sign anyone in — the password still has to unlock it.
+$('userdata-copy').addEventListener('click', async () => {
+  if (!userdataBox.value) return;
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(userdataBox.value);
+      userdataStatus.className = 'pill ok';
+      userdataStatus.textContent = 'copied';
+      return;
+    } catch { /* fall through to the select fallback */ }
+  }
+  userdataBox.focus();
+  userdataBox.select();
+  document.execCommand('copy');
+  userdataStatus.className = 'pill ok';
+  userdataStatus.textContent = 'copied';
+});
+
+// Store whatever text claims to be a record; report why it was rejected.
+function ingestRecordText(text) {
+  if (!String(text).trim()) {
+    renderUserData();
+    return false;
+  }
+  try {
+    saveRecord(textToRecord(text));
+    render();
+    userdataStatus.className = 'pill ok';
+    userdataStatus.textContent = 'stored';
+    return true;
+  } catch (err) {
+    userdataStatus.className = 'pill err';
+    userdataStatus.textContent = err.message || 'unrecognised';
+    return false;
+  }
+}
+
+$('userdata-paste').addEventListener('click', async () => {
+  if (!navigator.clipboard?.readText) {
+    alert('Clipboard read not available in this browser — paste into the box manually.');
+    return;
+  }
+  try {
+    const text = await navigator.clipboard.readText();
+    userdataBox.value = text;
+    ingestRecordText(text);
+  } catch (err) {
+    alert(`Clipboard read failed: ${err.message}`);
+  }
+});
+
+userdataBox.addEventListener('input', () => ingestRecordText(userdataBox.value));
+
 // Card toggles: add or remove the signed-in user from the corresponding block.
 document.querySelectorAll('[data-toggle]').forEach((btn) => {
   btn.addEventListener('click', () => {
@@ -419,5 +754,8 @@ if ('serviceWorker' in navigator) {
 }
 
 showView('main');
+restoreSession();
 render();
-tryPrefill();
+// Only reach for a saved credential when the restored session didn't already
+// sign us in.
+if (!state.username) tryPrefill();

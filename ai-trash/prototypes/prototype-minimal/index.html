@@ -89,6 +89,9 @@
       line-height: 1.4;
       white-space: pre;
     }
+    /* The user-data record is reference material, not something to read at
+       length — keep it from pushing the agenda off the first screen. */
+    textarea.short { min-height: 92px; }
     input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
     button {
       display: inline-block;
@@ -189,6 +192,24 @@
       </div>
     </section>
 
+    <!-- The encrypted user-data record: salt + AES-GCM blob, both hex. Copy it
+         to move the account to another device; paste one in to adopt it here.
+         The box is editable so a manual paste works as well as the button. -->
+    <section>
+      <h2>Encrypted user data
+        <span id="userdata-status" class="pill">none stored</span>
+      </h2>
+      <textarea id="userdata-box" class="short" placeholder="No user data yet. Sign in and answer &quot;Create&quot; to generate it, or paste a record from another device here."></textarea>
+      <div class="paste-row">
+        <button type="button" id="userdata-copy">Copy to clipboard</button>
+        <button type="button" id="userdata-paste" class="secondary">Paste from clipboard</button>
+      </div>
+      <p class="hint">
+        The salt and the encrypted blob travel together — a blob without its
+        salt cannot be decrypted. Nothing here reveals the password.
+      </p>
+    </section>
+
     <!-- Two game cards. The date, weekday and player count are filled in from
          whatever the user pastes below. Tap the pill to toggle going / not going;
          the roster text is rewritten to add or remove your username. -->
@@ -279,7 +300,7 @@
     <div id="signin-view" hidden>
     <section>
       <h2>Sign in</h2>
-      <form id="signin-form" method="post" action="#signed-in" autocomplete="on">
+      <form id="signin-form" method="post" action="#signed-in" autocomplete="on" novalidate>
         <label for="signin-username">Username</label>
         <input
           id="signin-username"
@@ -301,11 +322,13 @@
           required
         />
 
-        <button type="submit" class="wide">Sign in</button>
+        <button type="submit" id="signin-submit" class="wide">Sign in</button>
         <button type="button" id="signin-cancel" class="wide secondary">Cancel</button>
         <p class="hint">
           The browser should offer to save these credentials on submit, and
-          auto-fill them on a later visit. The password is not used by the app.
+          auto-fill them on a later visit. The password decrypts the stored
+          user-data record; if there is none — or it doesn't decrypt — the app
+          offers to create one.
         </p>
       </form>
     </section>
