@@ -37,8 +37,36 @@ const $ = (id) => document.getElementById(id);
 const READABLE_PREFIX = 'Readable';
 const USER_DATA_BODY = 'This is a placeholder for the user data';
 
-function makePlaintext(username) {
-  return `${READABLE_PREFIX}: ${username}\n${USER_DATA_BODY}`;
+// Anything after the body is a section: a `[name]` line followed by `key: value`
+// lines. `group1` carries this account's signing keypair, generated once when
+// the account is created and encrypted along with everything else.
+const GROUP_SECTION = 'group1';
+// ECDSA over P-256: an identity key. It signs group content and verifies what
+// other members signed — it is not an encryption key, so anything signed with
+// it is still readable by whoever holds it. P-256 rather than Ed25519 because
+// WebCrypto's Ed25519 is recent in Gecko and may be missing on the Android
+// browsers this prototype gets tested on, where generateKey would then throw.
+const GROUP_KEY_ALG = { name: 'ECDSA', namedCurve: 'P-256' };
+const GROUP_KEY_LABEL = 'ECDSA P-256';
+
+function makePlaintext(username, sections = '') {
+  const head = `${READABLE_PREFIX}: ${username}\n${USER_DATA_BODY}`;
+  return sections ? `${head}\n\n${sections}` : head;
+}
+
+// A fresh keypair, rendered as the section that goes into the blob: the public
+// key as SPKI, the private key as PKCS8, both hex like everything else stored
+// here. Extractable, or the private half could not be written down at all.
+async function makeGroupSection() {
+  const pair = await crypto.subtle.generateKey(GROUP_KEY_ALG, true, ['sign', 'verify']);
+  const pub = new Uint8Array(await crypto.subtle.exportKey('spki', pair.publicKey));
+  const priv = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey));
+  return [
+    `[${GROUP_SECTION}]`,
+    `alg: ${GROUP_KEY_LABEL}`,
+    `public: ${bytesToHex(pub)}`,
+    `private: ${bytesToHex(priv)}`,
+  ].join('\n');
 }
 
 // Split a decrypted plaintext into { username, body, text }, or null when it
@@ -224,20 +252,23 @@ async function deriveKey(password, saltBytes) {
   );
 }
 
-// Create: fresh random salt, key derived from it plus the password, the
-// username and user data encrypted under that key. Returns the record; the
-// caller stores it.
+// Create: fresh random salt, key derived from it plus the password, then the
+// username, the user data and a brand-new group1 keypair encrypted under that
+// key. Returns the record *and* the plaintext that went into it — the keypair
+// is random, so rebuilding the plaintext afterwards would invent a different
+// one than the blob holds.
 async function createRecord(username, password) {
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const key = await deriveKey(password, salt);
   const nonce = crypto.getRandomValues(new Uint8Array(NONCE_BYTES));
+  const text = makePlaintext(username, await makeGroupSection());
   const ct = new Uint8Array(await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: nonce }, key, textEnc.encode(makePlaintext(username))
+    { name: 'AES-GCM', iv: nonce }, key, textEnc.encode(text)
   ));
   const envelope = new Uint8Array(nonce.length + ct.length);
   envelope.set(nonce, 0);
   envelope.set(ct, nonce.length);
-  return { id: newId(), saltHex: bytesToHex(salt), dataHex: bytesToHex(envelope) };
+  return { rec: { id: newId(), saltHex: bytesToHex(salt), dataHex: bytesToHex(envelope) }, text };
 }
 
 // Unlock one blob: returns { username, body } on success, null when the
@@ -410,14 +441,16 @@ async function attemptSignIn(username, password, { interactive, unlockId = '' })
       if (!interactive) return false;
       alert('Incorrect username or password.');
       if (!confirm(`Create a new user "${username.trim()}" with this password?`)) return false;
-      const rec = await createRecord(username.trim(), password);
+      const created = await createRecord(username.trim(), password);
       const users = loadUsers();
-      users.push(rec);
+      users.push(created.rec);
       if (!saveUsers(users)) {
         alert('Created, but this browser would not store it — copy the vault '
           + 'out of the user-data box, it is gone on reload.');
       }
-      hit = { rec, ...parsePlaintext(makePlaintext(username.trim())) };
+      // The plaintext the blob actually holds, keypair included, not a rebuilt
+      // one — those would differ.
+      hit = { rec: created.rec, ...parsePlaintext(created.text) };
     }
 
     // The stored spelling of the username is the canonical one.

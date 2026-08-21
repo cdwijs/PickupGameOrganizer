@@ -29,6 +29,11 @@ Each entry's `dataHex` is `nonce ‖ AES-GCM(key, plaintext)` over
 ```
 Readable: <username>
 This is a placeholder for the user data
+
+[group1]
+alg: ECDSA P-256
+public: 3059301306072a8648ce3d0201…
+private: 308187020100301306072a8648…
 ```
 
 so **the username is inside the ciphertext**. Nothing stored in the clear says
@@ -54,8 +59,30 @@ users a phone would hold — a real client would key the lookup on something
 public.
 
 **Creating** generates a fresh 16-byte salt, derives a key from it and the
-password, and encrypts the username plus the user data under that key. The salt
-and the ciphertext are stored; the password never is.
+password, generates the `group1` keypair below, and encrypts the username, the
+user data and that keypair under the derived key. The salt and the ciphertext
+are stored; the password never is, and neither is the keypair in any other
+form.
+
+### The group1 keypair
+
+Anything after the body is a section: a `[name]` line followed by `key: value`
+lines. `group1` is written once, when the account is created, and holds an
+**ECDSA P-256** keypair — the public key as SPKI, the private key as PKCS8,
+both hex like everything else stored here.
+
+It is a signing key: it signs group content and verifies what other members
+signed. It is not an encryption key, so anything signed with it stays readable
+by whoever holds it. P-256 rather than Ed25519 because WebCrypto's Ed25519 is
+recent in Gecko and may be missing on the Android browsers this prototype gets
+tested on, where `generateKey` would throw instead of creating the account.
+
+Nothing signs anything yet — the prototype only generates the keypair and puts
+it in the blob, where a later version can pick it up.
+
+Accounts created before this existed have no `group1` section and keep working
+without one; only a freshly created account gets a keypair. Re-create the
+account to give it one.
 
 The *Decrypted user data* box below the vault shows the plaintext that came out
 of the blob — marker line, username and all. It is filled only while this
@@ -305,6 +332,9 @@ __________________________
 - The decrypted plaintext is never persisted: it lives in memory for the
   current page load only, which is why a reload starts out locked and the key
   has to come from a saved credential or from **Unlock**.
+- The `group1` private key is shown in the clear in the *Decrypted user data*
+  box, because that box shows the plaintext verbatim. That is the point of the
+  panel; the key is only ever *stored* inside the encrypted blob.
 - Two accounts can hold the same username as long as their passwords differ —
   the app cannot see a clash it has no key for. Whichever blob the password
   opens is the one you get.
