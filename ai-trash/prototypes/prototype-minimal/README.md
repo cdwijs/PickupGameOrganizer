@@ -279,8 +279,12 @@ __________________________
   handling, roster parser and rewriter, toggle logic, clipboard glue,
   service-worker registration.
 - `manifest.json` — PWA manifest; makes the page installable.
-- `sw.js` — cache-first service worker over the app shell. Bump `CACHE` when
-  any shell file changes.
+- `sw.js` — service worker over the app shell. Network-first: the network wins
+  whenever it answers and its response refreshes the cache, so a reload always
+  runs the current code. The cache is the offline fallback only. It was
+  cache-first, which served a changed shell stale for at least one load — and a
+  fresh `index.html` next to a stale `app.js` looks like a dead button, not a
+  caching problem. Bumping `CACHE` still clears the old generation.
 - `icon.svg` — soccer-ball icon on the standard rounded background.
 
 ## Notes and limitations
