@@ -56,17 +56,18 @@ couple of megabytes — with 0.005° available for somewhere dense enough that
 even that is refused. When the API does refuse, the app repeats its reason and
 points at the smaller size rather than reporting a generic failure.
 
-### The box is centred on the rounded pair
+### The box is centred on your exact position
 
-Which means it usually does **not** contain you: rounding moves the centre by
-up to 0.05°, about 5.6 km. The panel says so — either *"you are inside it,
-156 m from its centre"* or *"3.3 km from where you are, so your own position is
-outside it"* — so the offset is visible before you download rather than a
-surprise in JOSM afterwards.
+Not on the rounded pair — you are always at the middle of what you download,
+and the panel shows the centre it used to six decimals. The rounded pair above
+is the reading the app is named for; it no longer anchors anything.
 
-That is what "the map data for that location" means here: the location is the
-rounded pair, not the raw fix. Centring on the raw position instead is a
-one-line change in `download()`.
+This costs more data than centring on the rounded cell did, because the
+rounded cell can easily land somewhere emptier than where you are standing. The
+same 0.01° box was 2.5 MB and 9 117 nodes centred on 52.4/4.9, and **11.2 MB
+with 36 096 nodes** centred on the real fix in the middle of Amsterdam — 72 % of
+the API's 50 000-node budget. In a denser city centre this is where 0.005°
+earns its place.
 
 ## The map window
 
@@ -91,10 +92,17 @@ canvas.
 Drag to pan, scroll or pinch to zoom, and the three buttons do zoom in, zoom
 out and fit.
 
+**Every node in the file is drawn**, way vertices included, with the ones
+carrying tags — a shop, a bench, a traffic signal — in orange and slightly
+larger. The dots are sized in metres of ground like the roads, deliberately
+sub-pixel at fit zoom: a city-centre extract holds tens of thousands of nodes
+over a canvas of a hundred thousand pixels, so any floor at one pixel turns the
+map into a solid block of colour. They stay a translucent speckle until you
+zoom in, and separate into individual points when you do.
+
 What is **not** drawn: relations, so a multipolygon lake appears as its outline
-rather than a filled shape; standalone POI nodes; and any labels at all. Adding
-multipolygon assembly is the obvious next step if this needs to look like a
-real map.
+rather than a filled shape, and any labels at all. Adding multipolygon assembly
+is the obvious next step if this needs to look like a real map.
 
 ## Running it
 
@@ -124,10 +132,10 @@ worker).
 2. Refuse the permission. The pill reads *refused* and the note explains that
    the browser will not ask again by itself.
 3. Watch the rounded pair against the raw reading — 52.370216 becomes 52.4.
-4. Check the **centred on** line before downloading, to see how far the box has
-   moved from you.
+4. Check the **centred on** line before downloading — it is your own fix to six
+   decimals, and the blue dot lands at the middle of the map afterwards.
 5. Press **Download map data**. The pill counts the bytes as they arrive and
-   the file lands as `osm-52.4N-4.9E-0.01deg.osm`.
+   the file lands as `osm-52.3702N-4.8952E-0.01deg.osm`.
 6. Open the file: it is XML with a `<bounds>` element matching the bbox that
    was requested.
 7. Look at the **Map** panel that appears under it, and compare the dashed

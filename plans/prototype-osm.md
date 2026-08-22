@@ -86,6 +86,13 @@ size — with a nudge to 0.005°, rather than as a generic failure.
   library, no second request and no third-party server, and it doubles as
   proof that the download is what it claims to be. Relations are not
   resolved: a multipolygon lake renders as an outline.
+- **The box is centred on the exact fix**, not the rounded pair (Cedric,
+  after seeing the first render). The rounded pair stays as the reading. Costs
+  data: the same 0.01° box is 2.5 MB centred on 52.4/4.9 and 11.2 MB centred on
+  the real position in central Amsterdam.
+- **Every node is drawn**, tagged ones distinguished, sized sub-pixel at fit
+  zoom — 36 000 nodes over 94 000 canvas pixels is a solid block of colour at
+  any 1 px floor.
 - **The view frames the requested box plus 12 %**, not the data extent.
   Framing the data was tried and measured worse — the API returns whole ways,
   so a single motorway running off for kilometres dropped ink coverage from
@@ -136,7 +143,13 @@ Two bugs the tests caught, both now fixed:
 
 1. The cell edges (52.35, 52.45) were printed through the one-decimal
    formatter and collapsed to "52.4 to 52.4".
-2. `hidden` on a `<button>` did nothing, because the author rule
+2. The zoom transform recomputed its centring term from the already-zoomed
+   scale while `zoomBy()` was separately holding a point still. The two
+   corrections compounded and three clicks of **+** pushed the map several
+   hundred pixels off the canvas. The first test only asserted that the pixels
+   changed, which they did — wrongly. It now asserts that the centre of the
+   requested box stays pinned to the centre of the canvas at every zoom level.
+3. `hidden` on a `<button>` did nothing, because the author rule
    `button { display: inline-block }` outranks the UA stylesheet's
    `[hidden] { display: none }`. The Cancel button stayed on screen after a
    download finished — **and `prototype-minimal` had shipped the same bug**,

@@ -194,6 +194,7 @@
     .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 0; font-size: 12px; color: var(--muted); }
     .legend span { display: inline-flex; align-items: center; gap: 5px; }
     .legend i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+    .legend i.dot { width: 7px; height: 7px; border-radius: 2px; }
   </style>
 </head>
 <body>
@@ -239,8 +240,8 @@
         degree; the cell it names runs ±0.05° around it.
       </p>
       <p class="hint">
-        The download below is centred on this pair but covers a much smaller
-        box — see the note there.
+        These two numbers are the reading. The download below is centred on the
+        exact fix above, not on this pair.
       </p>
     </section>
 
@@ -265,10 +266,11 @@
       <div class="bar" id="dl-bar" hidden><div id="dl-bar-fill"></div></div>
       <div class="note" id="dl-note" hidden></div>
       <p class="hint">
-        Raw OSM XML, the same data JOSM downloads. The box is centred on the
-        rounded pair and capped at 0.01° — the whole 0.1° cell would be a couple
-        of hundred megabytes. Even at this size a dense city can exceed the
-        API's 50 000-node limit; drop to 0.005° when it does.
+        Raw OSM XML, the same data JOSM downloads. The box is centred on your
+        exact position and capped at 0.01° — the whole 0.1° cell would be a
+        couple of hundred megabytes. Even at this size a city centre runs to
+        tens of thousands of nodes and can exceed the API's 50 000-node limit;
+        drop to 0.005° when it does.
       </p>
     </section>
 
@@ -295,10 +297,12 @@
         <span><i style="background:#f2b544"></i>main roads</span>
         <span><i style="background:#b9bec7"></i>streets</span>
         <span><i style="background:#c98fd6"></i>paths</span>
+        <span><i class="dot" style="background:#5b6472"></i>nodes</span>
+        <span><i class="dot" style="background:#c2410c"></i>tagged nodes</span>
       </p>
       <p class="hint" id="map-note">
-        Drag to pan, pinch or scroll to zoom. The dashed rectangle is the box
-        that was requested; the dot is where you are, when it falls inside.
+        Drag to pan, pinch or scroll to zoom. Every node in the file is drawn.
+        The dashed rectangle is the box that was requested.
       </p>
     </section>
   </main>

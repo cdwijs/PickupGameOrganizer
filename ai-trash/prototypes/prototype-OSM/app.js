@@ -35,16 +35,6 @@ function fmtEdge(deg) {
   return deg.toFixed(2);
 }
 
-// Rounding moves the centre by up to 0.05° — about 5.6 km north-south. At the
-// sizes this app downloads, the box therefore often does not contain the
-// position it came from, which is worth saying out loud rather than leaving to
-// be discovered in JOSM.
-function offsetKm(pos, cell) {
-  const ns = 110.574 * (cell.lat - pos.lat);
-  const ew = 111.320 * Math.cos((pos.lat * Math.PI) / 180) * (cell.lon - pos.lon);
-  return Math.hypot(ns, ew);
-}
-
 // Is the position actually inside the box we are about to ask for?
 function boxContains(box, pos) {
   return pos.lat >= box.minLat && pos.lat <= box.maxLat
@@ -175,19 +165,18 @@ function render() {
       + `${fmtKm(km.ns)} by ${fmtKm(km.ew)}.`;
   }
 
-  // The download panel only means anything once there is a cell to centre on.
+  // The box is centred on the exact fix. The rounded pair above is the reading
+  // the app is named for, not the thing the download is anchored to.
   const size = currentSize();
-  const box = cell ? boxAround(cell.lat, cell.lon, size) : null;
-  const km = cell ? boxKm(cell.lat, size) : null;
+  const box = pos ? boxAround(pos.lat, pos.lon, size) : null;
+  const km = pos ? boxKm(pos.lat, size) : null;
   $('dl-area').textContent = km ? `${fmtKm(km.ns)} × ${fmtKm(km.ew)} — ${km.km2.toFixed(1)} km²` : '—';
   $('dl-bbox').textContent = box ? fmtBox(box) : '—';
-  $('dl-source').textContent = cell ? 'OpenStreetMap API 0.6' : '—';
-  $('dl-centre').textContent = cell && pos
-    ? (boxContains(box, pos)
-      ? `the rounded pair — you are inside it, ${fmtKm(offsetKm(pos, cell))} from its centre`
-      : `the rounded pair — ${fmtKm(offsetKm(pos, cell))} from where you are, so your own position is outside it`)
+  $('dl-source').textContent = pos ? 'OpenStreetMap API 0.6' : '—';
+  $('dl-centre').textContent = pos
+    ? `your exact position, ${pos.lat.toFixed(6)}, ${pos.lon.toFixed(6)}`
     : '—';
-  downloadBtn.disabled = !cell || state.busy;
+  downloadBtn.disabled = !pos || state.busy;
   sizeRow.querySelectorAll('input').forEach((input) => { input.disabled = state.busy; });
   cancelBtn.hidden = !state.busy;
 }
@@ -334,16 +323,16 @@ function saveBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-function filenameFor(cell, size) {
-  const part = (v, pos, neg) => `${Math.abs(v).toFixed(1)}${v < 0 ? neg : pos}`;
-  return `osm-${part(cell.lat, 'N', 'S')}-${part(cell.lon, 'E', 'W')}-${size}deg.osm`;
+function filenameFor(centre, size) {
+  const part = (v, pos, neg) => `${Math.abs(v).toFixed(4)}${v < 0 ? neg : pos}`;
+  return `osm-${part(centre.lat, 'N', 'S')}-${part(centre.lon, 'E', 'W')}-${size}deg.osm`;
 }
 
 async function download() {
-  if (!state.cell || state.busy) return;
-  const cell = state.cell;
+  if (!state.position || state.busy) return;
+  const pos = state.position;
   const size = currentSize();
-  const box = boxAround(cell.lat, cell.lon, size);
+  const box = boxAround(pos.lat, pos.lon, size);
   const url = requestUrl(box);
 
   state.busy = true;
@@ -362,7 +351,7 @@ async function download() {
       return;
     }
     const blob = await readWithProgress(res);
-    const filename = filenameFor(cell, size);
+    const filename = filenameFor(pos, size);
     saveBlob(blob, filename);
     setPill(dlStatus, fmtBytes(blob.size), 'ok');
     setNote(dlNote, `Saved ${filename} — ${fmtBytes(blob.size)} of OSM XML for `
@@ -422,12 +411,14 @@ const PALETTES = {
     buildingLine: '#b9bec7', major: '#f2b544', majorLine: '#d99a20',
     minor: '#ffffff', minorLine: '#b9bec7', path: '#c98fd6', rail: '#8a8f98',
     boxLine: '#d73a49', ink: '#0f172a', me: '#3b6ef0',
+    node: '#5b6472', nodeTagged: '#c2410c',
   },
   dark: {
     paper: '#1a1d23', green: '#20361f', water: '#183246', building: '#2f343d',
     buildingLine: '#3d434e', major: '#8a6a1e', majorLine: '#b58a2a',
     minor: '#3a4049', minorLine: '#4a515c', path: '#6b4b78', rail: '#6b7280',
     boxLine: '#ff7b72', ink: '#e6e8eb', me: '#4d7cff',
+    node: '#9aa3af', nodeTagged: '#fb923c',
   },
 };
 
@@ -459,9 +450,17 @@ function parseOsm(xmlText) {
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
   if (doc.querySelector('parsererror')) throw new Error('the response was not valid XML');
 
+  // Two lists as well as the lookup: every node gets drawn, and a node
+  // carrying tags is a thing in its own right — a bench, a shop, a traffic
+  // signal — rather than a bend in a way, so it is worth telling apart. A
+  // <node> can only contain <tag> children, so the child count is the test.
   const nodes = new Map();
+  const plain = [];
+  const tagged = [];
   for (const n of Array.from(doc.getElementsByTagName('node'))) {
-    nodes.set(n.getAttribute('id'), [Number(n.getAttribute('lon')), Number(n.getAttribute('lat'))]);
+    const pt = [Number(n.getAttribute('lon')), Number(n.getAttribute('lat'))];
+    nodes.set(n.getAttribute('id'), pt);
+    (n.children.length ? tagged : plain).push(pt);
   }
 
   const ways = [];
@@ -486,7 +485,10 @@ function parseOsm(xmlText) {
     const closed = pts.length > 2 && first[0] === last[0] && first[1] === last[1];
     ways.push({ layer, pts, closed });
   }
-  return { ways, count: { nodes: nodes.size, ways: ways.length } };
+  return {
+    ways, plain, tagged,
+    count: { nodes: nodes.size, ways: ways.length, tagged: tagged.length },
+  };
 }
 
 // The API answers with whole ways, so the data reaches past the bbox on every
@@ -519,16 +521,23 @@ function projector(box) {
   };
 }
 
-// Fit the requested box into the canvas with a small margin, then apply the
-// user's pan and zoom on top.
+// Fit the frame into the canvas, then apply the user's pan and zoom on top of
+// that fixed layout: screen = (world * base + centring) * view.scale + view.t.
+//
+// The centring term must be computed at the *base* scale, not the zoomed one.
+// Deriving it from the zoomed scale re-centres the content on every zoom step
+// while zoomBy() is separately holding a point still, and the two corrections
+// compound — three clicks of + pushed the map several hundred pixels off the
+// canvas.
 function transformFor(proj, cssW, cssH) {
   const pad = 10;
   const base = Math.min((cssW - pad * 2) / proj.w, (cssH - pad * 2) / proj.h);
-  const scale = base * view.scale;
+  const padX = (cssW - proj.w * base) / 2;
+  const padY = (cssH - proj.h * base) / 2;
   return {
-    scale,
-    ox: (cssW - proj.w * scale) / 2 + view.tx,
-    oy: (cssH - proj.h * scale) / 2 + view.ty,
+    scale: base * view.scale,
+    ox: padX * view.scale + view.tx,
+    oy: padY * view.scale + view.ty,
   };
 }
 
@@ -626,6 +635,30 @@ function drawMap() {
     ctx.setLineDash([]);
   }
 
+  // Every node in the file, way vertices included. Sized in metres of ground
+  // like the roads, so at fit zoom they are a fine speckle over the geometry
+  // and only separate into individual points once you zoom in. Squares rather
+  // than arcs: there can be tens of thousands of them, and a 1 px arc costs
+  // far more than a 1 px rect.
+  // Sub-pixel at fit zoom on purpose. A city-centre extract holds tens of
+  // thousands of nodes over a canvas of a hundred thousand pixels, so any
+  // floor at 1 px turns the map into a solid block of dots — they have to
+  // stay a translucent speckle until zooming separates them.
+  const dot = (metres, min, max) => Math.min(max, Math.max(min, metres / mPerPx));
+  const nodeR = dot(1.1, 0.3, 2.5);
+  const tagR = dot(2.0, 0.45, 3.5);
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = col.node;
+  for (const [lon, lat] of scene.plain) {
+    ctx.fillRect(px(lon) - nodeR, py(lat) - nodeR, nodeR * 2, nodeR * 2);
+  }
+  ctx.globalAlpha = 0.75;
+  ctx.fillStyle = col.nodeTagged;
+  for (const [lon, lat] of scene.tagged) {
+    ctx.fillRect(px(lon) - tagR, py(lat) - tagR, tagR * 2, tagR * 2);
+  }
+  ctx.globalAlpha = 1;
+
   // The requested box, so it is obvious how much was asked for and where the
   // data stops.
   ctx.save();
@@ -668,15 +701,18 @@ function showMap(xmlText, box, pos) {
       const parsed = parseOsm(xmlText);
       const frame = framed(box);
       scene = {
-        ways: parsed.ways, count: parsed.count, box, frame,
+        ways: parsed.ways, plain: parsed.plain, tagged: parsed.tagged,
+        count: parsed.count, box, frame,
         pos: pos && boxContains(frame, pos) ? pos : null,
       };
       view = { scale: 1, tx: 0, ty: 0 };
       drawMap();
-      setPill(mapStatus, `${parsed.count.nodes} nodes · ${parsed.count.ways} ways`, 'ok');
-      mapNote.textContent = 'Drag to pan, pinch or scroll to zoom. The dashed rectangle is the '
-        + 'box that was requested — the data reaches past it because the API returns whole ways. '
-        + (scene.pos ? 'The dot is where you are.' : 'Your own position is off this map entirely.');
+      setPill(mapStatus, `${parsed.count.nodes} nodes · ${parsed.count.tagged} tagged · `
+        + `${parsed.count.ways} ways`, 'ok');
+      mapNote.textContent = 'Drag to pan, pinch or scroll to zoom. Every node in the file is '
+        + 'drawn, the orange ones being those that carry tags. The dashed rectangle is the box '
+        + 'that was requested — the data reaches past it because the API returns whole ways. '
+        + (scene.pos ? 'The blue dot is where you are.' : 'Your own position is off this map.');
     } catch (err) {
       setPill(mapStatus, 'unreadable', 'err');
       mapNote.textContent = `Could not draw the data: ${err.message || err}`;
