@@ -37,6 +37,10 @@
       }
     }
     * { box-sizing: border-box; }
+    /* An author `display` rule beats the UA stylesheet's `[hidden]`, so
+       `button { display: inline-block }` quietly keeps hidden buttons on
+       screen. Restore what the attribute is supposed to mean. */
+    [hidden] { display: none !important; }
     body {
       margin: 0;
       padding: 16px;
