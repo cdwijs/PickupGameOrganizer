@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OSM Prototype</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <meta name="theme-color" content="#3b6ef0" />
+  <style>
+    :root {
+      --bg: #eef1f5;
+      --panel: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #3b6ef0;
+      --accent-text: #ffffff;
+      --ok: #16a34a;
+      --warn: #b45309;
+      --warn-soft: #fef3c7;
+      --err: #d73a49;
+      --code-bg: #f1f5f9;
+      --measure: 480px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14161a;
+        --panel: #1c1f26;
+        --border: #2c313a;
+        --text: #e6e8eb;
+        --muted: #9aa3af;
+        --accent: #4d7cff;
+        --ok: #3fb950;
+        --warn: #e3b341;
+        --warn-soft: #3a2f12;
+        --err: #ff7b72;
+        --code-bg: #23272f;
+      }
+    }
+    * { box-sizing: border-box; }
+    /* An author `display` rule beats the UA stylesheet's `[hidden]`, so
+       `button { display: inline-block }` quietly keeps hidden buttons on
+       screen. Restore what the attribute is supposed to mean. */
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    main { max-width: var(--measure); margin: 0 auto; display: grid; gap: 16px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      min-width: 0;
+    }
+    section h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    section h2 .pill { margin-left: auto; }
+    button {
+      display: inline-block;
+      padding: 8px 14px;
+      margin: 4px 4px 4px 0;
+      border: 1px solid var(--border);
+      background: var(--accent);
+      color: var(--accent-text);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: var(--panel); color: var(--text); }
+    button.wide { width: 100%; margin: 8px 0 0; }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      background: var(--code-bg);
+      color: var(--muted);
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    .pill.ok { color: var(--ok); }
+    .pill.err { color: var(--err); }
+    .pill.warn { color: var(--warn); }
+    p.hint { margin: 8px 0 0; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+    .note {
+      margin: 10px 0 0;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--warn-soft);
+      color: var(--text);
+      font-size: 12px;
+      border: 1px solid var(--border);
+    }
+    .note.err { background: transparent; border-color: var(--err); color: var(--err); }
+    .note[hidden] { display: none; }
+
+    /* The readings: label on the left, monospace value on the right, so the
+       decimal points line up between latitude and longitude. */
+    .readout { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; align-items: baseline; }
+    .readout dt { color: var(--muted); font-size: 12px; }
+    .readout dd {
+      margin: 0;
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    /* The two rounded numbers are the point of the app — give them room. */
+    .degrees { display: flex; gap: 12px; flex-wrap: wrap; margin: 2px 0 0; }
+    .degree-card {
+      flex: 1 1 130px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: var(--code-bg);
+    }
+    .degree-card .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .degree-card .val {
+      font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .degree-card .val .unit { font-size: 15px; font-weight: 400; color: var(--muted); }
+
+    .sizes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .sizes label {
+      flex: 1 1 auto;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 12px;
+      cursor: pointer;
+      text-align: center;
+      background: var(--code-bg);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .sizes label.big { flex-basis: 100%; }
+    .sizes input { position: absolute; opacity: 0; pointer-events: none; }
+    .sizes label:has(input:checked) {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--accent-text);
+    }
+    .sizes label:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+
+    .bar {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--code-bg);
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s linear; }
+    .bar[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <!-- Step 1. Geolocation needs a secure context, which on a phone means the
+         LAN HTTPS setup — the banner says so rather than letting the request
+         fail with a bare "unavailable". -->
+    <section>
+      <h2>Where you are
+        <span id="loc-status" class="pill">not asked yet</span>
+      </h2>
+      <p class="hint" id="loc-intro">
+        The browser asks your permission first. Nothing leaves the device until
+        you press download, and no position is ever stored.
+      </p>
+      <button type="button" id="locate-btn" class="wide">Use my location</button>
+      <div class="note" id="loc-note" hidden></div>
+      <dl class="readout" id="loc-readout" hidden>
+        <dt>latitude</dt><dd id="raw-lat">—</dd>
+        <dt>longitude</dt><dd id="raw-lon">—</dd>
+        <dt>accuracy</dt><dd id="raw-acc">—</dd>
+      </dl>
+    </section>
+
+    <!-- Step 2. The two numbers. Rounded to 0.1°, which names a cell of about
+         11.1 km by 6.9 km at 52°N. -->
+    <section>
+      <h2>Rounded to 0.1°
+        <span id="cell-status" class="pill">—</span>
+      </h2>
+      <div class="degrees">
+        <div class="degree-card">
+          <div class="lbl">latitude</div>
+          <div class="val" id="cell-lat">—<span class="unit"></span></div>
+        </div>
+        <div class="degree-card">
+          <div class="lbl">longitude</div>
+          <div class="val" id="cell-lon">—<span class="unit"></span></div>
+        </div>
+      </div>
+      <p class="hint" id="cell-span">
+        Waiting for a position. The pair is rounded to the nearest tenth of a
+        degree; the cell it names runs ±0.05° around it.
+      </p>
+      <p class="hint">
+        The download below is centred on this pair but covers a much smaller
+        box — see the note there.
+      </p>
+    </section>
+
+    <!-- Step 3. The download. Sizes are centred on the rounded pair, and the
+         list is what the APIs will actually serve — see the README. -->
+    <section>
+      <h2>OSM map data
+        <span id="dl-status" class="pill">—</span>
+      </h2>
+      <div class="sizes" id="size-row">
+        <label><input type="radio" name="size" value="0.005" /> 0.005°</label>
+        <label><input type="radio" name="size" value="0.01" checked /> 0.01°</label>
+      </div>
+      <dl class="readout">
+        <dt>area</dt><dd id="dl-area">—</dd>
+        <dt>bbox</dt><dd id="dl-bbox">—</dd>
+        <dt>centred on</dt><dd id="dl-centre">—</dd>
+        <dt>source</dt><dd id="dl-source">—</dd>
+      </dl>
+      <button type="button" id="download-btn" class="wide" disabled>Download map data</button>
+      <button type="button" id="cancel-btn" class="wide secondary" hidden>Cancel</button>
+      <div class="bar" id="dl-bar" hidden><div id="dl-bar-fill"></div></div>
+      <div class="note" id="dl-note" hidden></div>
+      <p class="hint">
+        Raw OSM XML, the same data JOSM downloads. The box is centred on the
+        rounded pair and capped at 0.01° — the whole 0.1° cell would be a couple
+        of hundred megabytes. Even at this size a dense city can exceed the
+        API's 50 000-node limit; drop to 0.005° when it does.
+      </p>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

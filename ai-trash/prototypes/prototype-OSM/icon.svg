@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Map pin on a grid">
+  <rect width="192" height="192" rx="42" fill="#3b6ef0"/>
+  <!-- The 0.1° grid the app rounds onto. -->
+  <g stroke="#ffffff" stroke-opacity="0.35" stroke-width="4">
+    <path d="M40 64h112M40 96h112M40 128h112M64 40v112M96 40v112M128 40v112"/>
+  </g>
+  <!-- Pin, centred on a grid crossing. -->
+  <path d="M96 44c-19 0-34 15-34 34 0 25 34 62 34 62s34-37 34-62c0-19-15-34-34-34z" fill="#ffffff"/>
+  <circle cx="96" cy="78" r="13" fill="#3b6ef0"/>
+</svg>
