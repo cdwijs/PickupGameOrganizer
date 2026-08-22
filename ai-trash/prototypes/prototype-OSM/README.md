@@ -3,13 +3,14 @@
 A PWA that asks where you are, rounds that to a tenth of a degree, and offers
 to download the OpenStreetMap data for the spot.
 
-Three panels, in order:
+Four panels, in order:
 
 1. **Where you are** — the browser's permission prompt, then latitude and
    longitude in decimal degrees with the reported accuracy.
 2. **Rounded to 0.1°** — the two numbers, and the 0.1° cell they name.
 3. **OSM map data** — a box centred on the rounded pair, fetched as raw `.osm`
    XML and saved as a file.
+4. **Map** — that same XML drawn on a canvas, so you can see what you got.
 
 No build step, no dependency, no key. Everything is `index.html` + `app.js`,
 the same shape as the other prototypes here.
@@ -67,6 +68,34 @@ That is what "the map data for that location" means here: the location is the
 rounded pair, not the raw fix. Centring on the raw position instead is a
 one-line change in `download()`.
 
+## The map window
+
+The download is rendered from the bytes already in hand — no second request, no
+tile service, no library. Tiles are somebody else's servers with their own
+usage policy, and drawing the data is the more useful thing anyway: the picture
+*is* the download, so a wrong bbox or an empty area is visible immediately.
+
+Ways are sorted into layers — green, water, buildings, paths, rail, streets,
+main roads — and painted in that order, with road widths scaled in metres of
+ground so zooming in widens them the way a map should. There is a scale bar, a
+dot for your position when it is on screen, and a dashed rectangle showing the
+box that was requested.
+
+**The data reaches past that rectangle**, because the API returns whole ways: a
+street clipped by the bbox still arrives complete, and a motorway can carry on
+for kilometres. The view frames the requested box with 12 % of air around it
+and lets the surplus run off the edges. Framing the data extent instead was
+tried and is worse — one long way drops the interesting part to a tenth of the
+canvas.
+
+Drag to pan, scroll or pinch to zoom, and the three buttons do zoom in, zoom
+out and fit.
+
+What is **not** drawn: relations, so a multipolygon lake appears as its outline
+rather than a filled shape; standalone POI nodes; and any labels at all. Adding
+multipolygon assembly is the obvious next step if this needs to look like a
+real map.
+
 ## Running it
 
 ```sh
@@ -101,14 +130,18 @@ worker).
    the file lands as `osm-52.4N-4.9E-0.01deg.osm`.
 6. Open the file: it is XML with a `<bounds>` element matching the bbox that
    was requested.
-7. Pull the network cable and reload. The shell still loads; the download
+7. Look at the **Map** panel that appears under it, and compare the dashed
+   rectangle with how far the data actually extends. Pinch to zoom in until the
+   buildings separate.
+8. Pull the network cable and reload. The shell still loads; the download
    obviously does not.
 
 ## Files
 
-- `index.html` — markup, styling, the three panels.
+- `index.html` — markup, styling, the four panels.
 - `app.js` — geolocation, rounding, bbox maths, the fetch with progress and
-  cancel, and the file save.
+  cancel, the file save, and the canvas renderer (XML parse, layer
+  classification, projection, pan and zoom).
 - `manifest.json` — PWA manifest; makes the page installable.
 - `sw.js` — network-first service worker over the app shell, the same strategy
   `prototype-minimal` uses. API calls are cross-origin and pass straight
@@ -124,10 +157,17 @@ worker).
 - A download can be cancelled mid-flight — `AbortController` — and the byte
   counter moves while it runs. The progress *bar* only appears when the server
   sent a `Content-Length`, which these endpoints usually do not.
-- Nothing is stored: no position in `localStorage`, no history, no map render.
-  The app holds the current fix in memory and forgets it on reload.
+- Nothing is persisted: no position in `localStorage`, no history, nothing
+    kept from the render. The app holds the current fix and the parsed geometry
+    in memory and forgets both on reload.
 - The bbox is clamped to ±90 / ±180, so a cell against a pole or the
   antimeridian is clipped rather than sent as an invalid request. A cell that
   straddles the antimeridian is clipped, not split into two.
+- The XML is parsed with `DOMParser` on the main thread, so a dense extract
+  stalls the page for a moment while it renders. The pill says *rendering…*
+  first. A worker would fix it and is not worth it at this size.
+- The projection is equirectangular scaled by the cosine of the centre
+  latitude. Over a box a kilometre across the difference from Mercator is far
+  below a pixel; over a whole cell it would not be.
 - Data © OpenStreetMap contributors, ODbL. Anything downloaded here carries
-  that licence with it.
+  that licence with it, and so does anything drawn from it.

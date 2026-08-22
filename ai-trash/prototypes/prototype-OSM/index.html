@@ -167,6 +167,33 @@
     }
     .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s linear; }
     .bar[hidden] { display: none; }
+
+    /* The map window. `touch-action: none` so dragging pans the map instead of
+       scrolling the page out from under the finger. */
+    .mapwrap {
+      position: relative;
+      margin-top: 4px;
+      aspect-ratio: 4 / 3;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--code-bg);
+    }
+    .mapwrap canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+    .mapwrap canvas:active { cursor: grabbing; }
+    .mapctl { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .mapctl button {
+      margin: 0;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      font-size: 17px;
+      line-height: 1;
+      opacity: 0.92;
+    }
+    .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
   </style>
 </head>
 <body>
@@ -242,6 +269,36 @@
         rounded pair and capped at 0.01° — the whole 0.1° cell would be a couple
         of hundred megabytes. Even at this size a dense city can exceed the
         API's 50 000-node limit; drop to 0.005° when it does.
+      </p>
+    </section>
+
+    <!-- The map window. Drawn from the XML that was just downloaded — no tile
+         service, no library, so it works offline and asks nothing of anyone
+         else's servers. Relations are not resolved, so a multipolygon lake
+         renders as its outline. -->
+    <section id="map-section" hidden>
+      <h2>Map
+        <span id="map-status" class="pill">—</span>
+      </h2>
+      <div class="mapwrap">
+        <canvas id="map-canvas"></canvas>
+        <div class="mapctl">
+          <button type="button" id="map-in" class="secondary" title="Zoom in" aria-label="Zoom in">+</button>
+          <button type="button" id="map-out" class="secondary" title="Zoom out" aria-label="Zoom out">−</button>
+          <button type="button" id="map-fit" class="secondary" title="Fit the box" aria-label="Fit the box">□</button>
+        </div>
+      </div>
+      <p class="legend">
+        <span><i style="background:#8a8f98"></i>buildings</span>
+        <span><i style="background:#7fb2e5"></i>water</span>
+        <span><i style="background:#9ccc9c"></i>green</span>
+        <span><i style="background:#f2b544"></i>main roads</span>
+        <span><i style="background:#b9bec7"></i>streets</span>
+        <span><i style="background:#c98fd6"></i>paths</span>
+      </p>
+      <p class="hint" id="map-note">
+        Drag to pan, pinch or scroll to zoom. The dashed rectangle is the box
+        that was requested; the dot is where you are, when it falls inside.
       </p>
     </section>
   </main>

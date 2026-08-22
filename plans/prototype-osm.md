@@ -79,8 +79,17 @@ size — with a nudge to 0.005°, rather than as a generic failure.
 - **The cap lives in one function** (`currentSize()`), because clamping it only
   inside `download()` let the panel advertise a box bigger than the one
   actually fetched.
-- **No map rendering.** No tile fetching either: the tile servers are a
-  separate service with their own usage policy, and the ask is map *data*.
+- **No tile fetching.** The tile servers are a separate service with their own
+  usage policy, and the ask is map *data*.
+- **A map window was added afterwards** (Cedric, same session), drawn on a
+  canvas from the downloaded XML rather than from tiles — so it needs no
+  library, no second request and no third-party server, and it doubles as
+  proof that the download is what it claims to be. Relations are not
+  resolved: a multipolygon lake renders as an outline.
+- **The view frames the requested box plus 12 %**, not the data extent.
+  Framing the data was tried and measured worse — the API returns whole ways,
+  so a single motorway running off for kilometres dropped ink coverage from
+  32 % of the canvas to 9 %.
 - **Cancellable** downloads via `AbortController`, with bytes-received shown
   while streaming — a 219 MB transfer with no feedback is unusable.
 - **Network-first service worker**, the same one `prototype-minimal` now uses.

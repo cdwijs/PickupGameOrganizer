@@ -367,6 +367,8 @@ async function download() {
     setPill(dlStatus, fmtBytes(blob.size), 'ok');
     setNote(dlNote, `Saved ${filename} — ${fmtBytes(blob.size)} of OSM XML for `
       + `${fmtBox(box)}.`);
+    // Draw the same bytes rather than asking the API twice.
+    showMap(await blob.text(), box, state.position);
   } catch (err) {
     if (err.name === 'AbortError') {
       setPill(dlStatus, 'cancelled');
@@ -388,6 +390,370 @@ async function download() {
 
 downloadBtn.addEventListener('click', download);
 cancelBtn.addEventListener('click', () => { if (controller) controller.abort(); });
+
+// ---- map render ----------------------------------------------------------
+//
+// Drawn straight from the XML that was downloaded: parse the nodes and ways,
+// project them flat, and paint them on a canvas. No tile service and no
+// library — the tiles are somebody else's servers with their own usage policy,
+// and the point here is to see the data that was actually fetched.
+//
+// Relations are not resolved. A multipolygon lake therefore appears as its
+// outline rather than a filled shape, which is a fair trade for not
+// implementing multipolygon assembly in a prototype.
+
+const mapSection = $('map-section');
+const mapCanvas = $('map-canvas');
+const mapStatus = $('map-status');
+const mapNote = $('map-note');
+const ctx = mapCanvas.getContext('2d');
+
+// What was parsed out of the last download, plus the box it was asked for.
+let scene = null;   // { ways, count: {nodes, ways}, box, pos }
+// Pan and zoom on top of the fit-to-box transform. Reset by "fit".
+let view = { scale: 1, tx: 0, ty: 0 };
+
+// Two palettes rather than one dimmed: a map that is legible in light mode is
+// muddy in dark, and these are the only colours in the app not driven by the
+// CSS variables (canvas cannot read them per shape cheaply).
+const PALETTES = {
+  light: {
+    paper: '#f6f7f9', green: '#d8ecd2', water: '#bcdcf5', building: '#d4d7dd',
+    buildingLine: '#b9bec7', major: '#f2b544', majorLine: '#d99a20',
+    minor: '#ffffff', minorLine: '#b9bec7', path: '#c98fd6', rail: '#8a8f98',
+    boxLine: '#d73a49', ink: '#0f172a', me: '#3b6ef0',
+  },
+  dark: {
+    paper: '#1a1d23', green: '#20361f', water: '#183246', building: '#2f343d',
+    buildingLine: '#3d434e', major: '#8a6a1e', majorLine: '#b58a2a',
+    minor: '#3a4049', minorLine: '#4a515c', path: '#6b4b78', rail: '#6b7280',
+    boxLine: '#ff7b72', ink: '#e6e8eb', me: '#4d7cff',
+  },
+};
+
+function palette() {
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? PALETTES.dark : PALETTES.light;
+}
+
+// Which layer a way belongs to, or null to skip it. Order of the tests is the
+// drawing priority: a building tagged as landuse is still a building.
+function classify(tags) {
+  if (tags.building || tags['building:part']) return 'building';
+  if (tags.natural === 'water' || tags.landuse === 'reservoir' || tags.waterway === 'riverbank') return 'water';
+  if (tags.waterway) return 'stream';
+  if (tags.leisure === 'park' || tags.leisure === 'garden' || tags.leisure === 'pitch'
+    || tags.natural === 'wood' || tags.natural === 'scrub' || tags.natural === 'grassland'
+    || tags.landuse === 'grass' || tags.landuse === 'forest' || tags.landuse === 'meadow') return 'green';
+  if (tags.railway) return 'rail';
+  const hw = tags.highway;
+  if (!hw) return null;
+  if (/^(motorway|trunk|primary|secondary|tertiary)(_link)?$/.test(hw)) return 'major';
+  if (/^(footway|path|cycleway|steps|track|bridleway|pedestrian)$/.test(hw)) return 'path';
+  return 'minor';
+}
+
+// Painter's order. Areas first, then the network on top of them.
+const LAYERS = ['green', 'water', 'building', 'path', 'rail', 'minor', 'major'];
+
+function parseOsm(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  if (doc.querySelector('parsererror')) throw new Error('the response was not valid XML');
+
+  const nodes = new Map();
+  for (const n of Array.from(doc.getElementsByTagName('node'))) {
+    nodes.set(n.getAttribute('id'), [Number(n.getAttribute('lon')), Number(n.getAttribute('lat'))]);
+  }
+
+  const ways = [];
+  for (const w of Array.from(doc.getElementsByTagName('way'))) {
+    const tags = {};
+    for (const t of Array.from(w.getElementsByTagName('tag'))) {
+      tags[t.getAttribute('k')] = t.getAttribute('v');
+    }
+    const layer = classify(tags);
+    if (!layer) continue;
+    const refs = Array.from(w.getElementsByTagName('nd'));
+    const pts = [];
+    for (const nd of refs) {
+      const p = nodes.get(nd.getAttribute('ref'));
+      // A way can reference a node outside the bbox that the API did send;
+      // one it did not send is simply dropped, leaving a shorter line.
+      if (p) pts.push(p);
+    }
+    if (pts.length < 2) continue;
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    const closed = pts.length > 2 && first[0] === last[0] && first[1] === last[1];
+    ways.push({ layer, pts, closed });
+  }
+  return { ways, count: { nodes: nodes.size, ways: ways.length } };
+}
+
+// The API answers with whole ways, so the data reaches past the bbox on every
+// side — and a motorway that carries on for kilometres reaches a very long way
+// past it. Framing the data extent therefore shrinks the interesting part to
+// nothing; frame the requested box with a little air around it instead and let
+// the surplus run off the edges of the canvas.
+const FRAME_MARGIN = 0.12;
+
+function framed(box) {
+  const dLat = (box.maxLat - box.minLat) * FRAME_MARGIN;
+  const dLon = (box.maxLon - box.minLon) * FRAME_MARGIN;
+  return {
+    minLat: box.minLat - dLat, maxLat: box.maxLat + dLat,
+    minLon: box.minLon - dLon, maxLon: box.maxLon + dLon,
+  };
+}
+
+// Equirectangular, scaled by the cosine of the centre latitude. Over a box a
+// kilometre across the difference from Mercator is far under one pixel, and
+// this keeps the arithmetic something you can read.
+function projector(box) {
+  const midLat = (box.minLat + box.maxLat) / 2;
+  const kx = Math.cos((midLat * Math.PI) / 180);
+  return {
+    x: (lon) => (lon - box.minLon) * kx,
+    y: (lat) => (box.maxLat - lat),
+    w: (box.maxLon - box.minLon) * kx,
+    h: box.maxLat - box.minLat,
+  };
+}
+
+// Fit the requested box into the canvas with a small margin, then apply the
+// user's pan and zoom on top.
+function transformFor(proj, cssW, cssH) {
+  const pad = 10;
+  const base = Math.min((cssW - pad * 2) / proj.w, (cssH - pad * 2) / proj.h);
+  const scale = base * view.scale;
+  return {
+    scale,
+    ox: (cssW - proj.w * scale) / 2 + view.tx,
+    oy: (cssH - proj.h * scale) / 2 + view.ty,
+  };
+}
+
+function drawScaleBar(c, cssW, cssH, metresPerPx, col) {
+  // Pick a round distance that lands between a fifth and a third of the width.
+  const target = (cssW / 4) * metresPerPx;
+  const nice = [10, 20, 50, 100, 200, 500, 1000, 2000, 5000];
+  const metres = nice.find((m) => m >= target) || nice[nice.length - 1];
+  const px = metres / metresPerPx;
+  const x = 12;
+  const y = cssH - 14;
+  c.save();
+  c.strokeStyle = col.ink;
+  c.fillStyle = col.ink;
+  c.globalAlpha = 0.75;
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(x, y - 5); c.lineTo(x, y); c.lineTo(x + px, y); c.lineTo(x + px, y - 5);
+  c.stroke();
+  c.font = '11px ui-monospace, monospace';
+  c.textBaseline = 'bottom';
+  c.fillText(metres >= 1000 ? `${metres / 1000} km` : `${metres} m`, x, y - 4);
+  c.restore();
+}
+
+function drawMap() {
+  if (!scene) return;
+  const col = palette();
+  const rect = mapCanvas.getBoundingClientRect();
+  const cssW = rect.width || 320;
+  const cssH = rect.height || 240;
+  const dpr = window.devicePixelRatio || 1;
+  if (mapCanvas.width !== Math.round(cssW * dpr) || mapCanvas.height !== Math.round(cssH * dpr)) {
+    mapCanvas.width = Math.round(cssW * dpr);
+    mapCanvas.height = Math.round(cssH * dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = col.paper;
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  const proj = projector(scene.frame);
+  const { scale, ox, oy } = transformFor(proj, cssW, cssH);
+  const px = (lon) => ox + proj.x(lon) * scale;
+  const py = (lat) => oy + proj.y(lat) * scale;
+
+  // Line widths are in metres of ground, so zooming in widens the roads the
+  // way a map expects rather than leaving hairlines.
+  const metresPerDeg = 110574;
+  const mPerPx = 1 / (scale / metresPerDeg);
+  const w = (metres, min) => Math.max(min, metres / mPerPx);
+
+  const STROKE = {
+    major: () => ({ line: col.majorLine, fill: col.major, casing: w(14, 2.5), core: w(10, 1.5) }),
+    minor: () => ({ line: col.minorLine, fill: col.minor, casing: w(8, 1.6), core: w(5.5, 0.9) }),
+    path: () => ({ line: col.path, fill: null, casing: 0, core: w(1.5, 0.8), dash: [3, 3] }),
+    rail: () => ({ line: col.rail, fill: null, casing: 0, core: w(2, 1), dash: [6, 4] }),
+    stream: () => ({ line: col.water, fill: null, casing: 0, core: w(3, 1) }),
+  };
+
+  const trace = (way) => {
+    ctx.beginPath();
+    ctx.moveTo(px(way.pts[0][0]), py(way.pts[0][1]));
+    for (let i = 1; i < way.pts.length; i++) ctx.lineTo(px(way.pts[i][0]), py(way.pts[i][1]));
+  };
+
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  for (const layer of LAYERS) {
+    const ways = scene.ways.filter((way) => way.layer === layer);
+    if (!ways.length) continue;
+
+    if (layer === 'green' || layer === 'water' || layer === 'building') {
+      ctx.fillStyle = layer === 'green' ? col.green : layer === 'water' ? col.water : col.building;
+      ctx.strokeStyle = layer === 'building' ? col.buildingLine : ctx.fillStyle;
+      ctx.lineWidth = 1;
+      for (const way of ways) {
+        trace(way);
+        if (way.closed) { ctx.fill(); if (layer === 'building' && scale > 2e5) ctx.stroke(); }
+        else ctx.stroke();
+      }
+      continue;
+    }
+
+    const st = STROKE[layer]();
+    ctx.setLineDash(st.dash || []);
+    if (st.casing) {
+      ctx.strokeStyle = st.line;
+      ctx.lineWidth = st.casing;
+      for (const way of ways) { trace(way); ctx.stroke(); }
+    }
+    ctx.strokeStyle = st.fill || st.line;
+    ctx.lineWidth = st.core;
+    for (const way of ways) { trace(way); ctx.stroke(); }
+    ctx.setLineDash([]);
+  }
+
+  // The requested box, so it is obvious how much was asked for and where the
+  // data stops.
+  ctx.save();
+  ctx.strokeStyle = col.boxLine;
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 1.5;
+  const bx0 = px(scene.box.minLon);
+  const bx1 = px(scene.box.maxLon);
+  const by0 = py(scene.box.maxLat);
+  const by1 = py(scene.box.minLat);
+  ctx.strokeRect(bx0, by0, bx1 - bx0, by1 - by0);
+  ctx.restore();
+
+  // Where you actually are, when that is inside the frame at all.
+  if (scene.pos) {
+    const x = px(scene.pos.lon);
+    const y = py(scene.pos.lat);
+    ctx.save();
+    ctx.fillStyle = col.me;
+    ctx.strokeStyle = col.paper;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawScaleBar(ctx, cssW, cssH, mPerPx, col);
+}
+
+// Show what was downloaded. Parsing a dense extract takes a moment, so the
+// pill says so before the main thread disappears into DOMParser.
+function showMap(xmlText, box, pos) {
+  mapSection.hidden = false;
+  setPill(mapStatus, 'rendering…');
+  // Let the pill paint before the parse blocks the thread.
+  requestAnimationFrame(() => {
+    try {
+      const parsed = parseOsm(xmlText);
+      const frame = framed(box);
+      scene = {
+        ways: parsed.ways, count: parsed.count, box, frame,
+        pos: pos && boxContains(frame, pos) ? pos : null,
+      };
+      view = { scale: 1, tx: 0, ty: 0 };
+      drawMap();
+      setPill(mapStatus, `${parsed.count.nodes} nodes · ${parsed.count.ways} ways`, 'ok');
+      mapNote.textContent = 'Drag to pan, pinch or scroll to zoom. The dashed rectangle is the '
+        + 'box that was requested — the data reaches past it because the API returns whole ways. '
+        + (scene.pos ? 'The dot is where you are.' : 'Your own position is off this map entirely.');
+    } catch (err) {
+      setPill(mapStatus, 'unreadable', 'err');
+      mapNote.textContent = `Could not draw the data: ${err.message || err}`;
+    }
+  });
+}
+
+// ---- map interaction -----------------------------------------------------
+
+function zoomBy(factor, cx, cy) {
+  const rect = mapCanvas.getBoundingClientRect();
+  const x = cx === undefined ? rect.width / 2 : cx;
+  const y = cy === undefined ? rect.height / 2 : cy;
+  // Keep the point under the cursor still while the scale changes.
+  const next = Math.min(64, Math.max(1, view.scale * factor));
+  const applied = next / view.scale;
+  view.tx = x - (x - view.tx) * applied;
+  view.ty = y - (y - view.ty) * applied;
+  view.scale = next;
+  drawMap();
+}
+
+$('map-in').addEventListener('click', () => zoomBy(1.5));
+$('map-out').addEventListener('click', () => zoomBy(1 / 1.5));
+$('map-fit').addEventListener('click', () => { view = { scale: 1, tx: 0, ty: 0 }; drawMap(); });
+
+mapCanvas.addEventListener('wheel', (evt) => {
+  if (!scene) return;
+  evt.preventDefault();
+  const rect = mapCanvas.getBoundingClientRect();
+  zoomBy(evt.deltaY < 0 ? 1.15 : 1 / 1.15, evt.clientX - rect.left, evt.clientY - rect.top);
+}, { passive: false });
+
+// One pointer pans, two pinch. Pointer events cover mouse and touch with the
+// same code, which is the whole reason to use them over touch events.
+const pointers = new Map();
+let pinchStart = null;
+
+mapCanvas.addEventListener('pointerdown', (evt) => {
+  if (!scene) return;
+  mapCanvas.setPointerCapture(evt.pointerId);
+  pointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+  pinchStart = null;
+});
+
+mapCanvas.addEventListener('pointermove', (evt) => {
+  if (!scene || !pointers.has(evt.pointerId)) return;
+  const prev = pointers.get(evt.pointerId);
+  pointers.set(evt.pointerId, { x: evt.clientX, y: evt.clientY });
+
+  if (pointers.size === 1) {
+    view.tx += evt.clientX - prev.x;
+    view.ty += evt.clientY - prev.y;
+    drawMap();
+    return;
+  }
+  if (pointers.size === 2) {
+    const [a, b] = Array.from(pointers.values());
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    const rect = mapCanvas.getBoundingClientRect();
+    const cx = (a.x + b.x) / 2 - rect.left;
+    const cy = (a.y + b.y) / 2 - rect.top;
+    if (pinchStart) zoomBy(dist / pinchStart, cx, cy);
+    pinchStart = dist;
+  }
+});
+
+for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
+  mapCanvas.addEventListener(type, (evt) => {
+    pointers.delete(evt.pointerId);
+    if (pointers.size < 2) pinchStart = null;
+  });
+}
+
+// Keep the drawing sharp when the window changes, and follow a theme switch.
+window.addEventListener('resize', () => drawMap());
+window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => drawMap());
 
 // ---- boot ----------------------------------------------------------------
 
