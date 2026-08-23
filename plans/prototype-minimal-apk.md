@@ -7,7 +7,17 @@ Named `prototype-minimal-apk` because **`prototype-apk` is already taken** — i
 is the Android port of `prototype-arti` (`org.pgo.artip2p`, Kotlin over a Rust
 JNI core), committed in `9659138`.
 
-## Status: written, not built
+## Status: built and signed
+
+`gradle assembleDebug` in the new `claude-android` image produces a 5.7 MB
+`app-debug.apk` — package `org.pgo.minimal`, minSdk 26 / targetSdk 34,
+launchable `MainActivity`, signed under APK Signature Scheme v2 with the debug
+certificate. It compiled first time. **It has not been run on a device.**
+
+Getting there needed three pre-existing problems in claude-code-docker sorted
+out first; see *Toolchain* below.
+
+## How it started: written, not built
 
 The container has no JDK, no Android SDK, no Gradle and no NDK — `java` does
 not exist anywhere on the filesystem. An APK is binary XML plus DEX bytecode,
@@ -16,16 +26,38 @@ here.
 
 Per the container rules the toolchain belongs in the image, not in an ad-hoc
 install. Cedric chose to add it and have the build and verification happen
-here afterwards. The project was written in the meantime so it is ready to
-build the moment the image has the SDK; **nothing in it has been compiled.**
+here afterwards. The project was written in the meantime, then built once the
+image existed.
 
-What the image needs (no NDK — there is no native code here):
+## Toolchain
 
-- `openjdk-17-jdk-headless`
-- Android command line tools, then `sdkmanager "platforms;android-34"
-  "build-tools;34.0.0" "platform-tools"`
+`Dockerfile.android` was added to claude-code-docker: the Android half of
+`Dockerfile.flutter` without Flutter/Dart, stacked on
+`claude-code-agent-jvm-base`. SDK platforms 34 & 36, build-tools 34.0.0 &
+36.0.0, Gradle 8.7, no NDK (bind-mounted from `android-sdk-cache/ndk` when a
+project needs one). Wired into `docker-compose.yml`, `build.sh`, `update.sh`,
+`gen-webui-config.sh` and the `ccd`/`ccg`/`ccq` launchers, and documented in
+that repo's README.
 
-The exact Dockerfile block is in the prototype's README.
+Three problems surfaced on the way, none of them Android-specific:
+
+1. **The disk was full** — 3.0 GB free of 932 GB. `docker builder prune`
+   returned enough to continue.
+2. **`install-claude.sh` was not idempotent**, despite its own header saying
+   "install (or update)": `ln -s` with no `-f`, and a `mv` that would nest a
+   new install inside an existing one. Every overlay ending in that layer fails
+   on a base that already has Claude. Fixed in place.
+3. **The local `claude-code-agent-base` was built without `--target base`**, so
+   it carries a Claude install (2.1.148, May) — which is what tripped over the
+   bug above. Rebuilding it properly turned out to be impossible right now: the
+   base Dockerfile patches `@cloudcli-ai/cloudcli` with `sed`, and the current
+   package no longer ships `dist-server/server/claude-sdk.js`, so the build dies
+   at that step. **That breakage predates this work and still stands** — it
+   blocks `claude-flutter` too.
+
+Because of (3), `Dockerfile.android` ships its own copy of `install-claude.sh`
+over the parent's, which keeps it buildable on whatever base is to hand and
+becomes a no-op once the base is fixed.
 
 ## Shape
 
@@ -67,10 +99,12 @@ minSdk 26 (PBKDF2WithHmacSHA256 and `java.time` both need 26).
 
 None of that is a substitute for a build.
 
-## Left for when it compiles
+## Left
 
-1. `./gradlew assembleDebug`, and whatever the first build turns up.
+1. **Run the APK.** It assembles and signs; nothing has launched it. The layout
+   is the least proven part — styles supplying `layout_width`, and two
+   `<include>`s of one card layout binding separately.
 2. The differential test the WASM port has — the roster port against
    prototype-minimal's own JavaScript, on the same inputs. It found two real
-   bugs there. Needs a JVM.
+   bugs there, and there is a JVM to run it on now.
 3. A vault round trip against the browser, run rather than reasoned about.

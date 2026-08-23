@@ -1,0 +1,9 @@
+# Gradle and Android build output. Everything here is generated.
+build/
+.gradle/
+local.properties
+.cxx/
+*.apk
+*.aab
+*.iml
+.idea/

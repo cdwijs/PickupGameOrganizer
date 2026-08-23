@@ -4,16 +4,25 @@
 and the same vault format, so a vault moves between this and the web and
 WebAssembly prototypes.
 
-> ## ⚠ Not yet compiled
->
-> **This project has never been built.** The container it was written in has no
-> JDK, no Android SDK and no Gradle, so not one line here has been through a
-> compiler — no `assembleDebug`, no lint, no run on a device. Expect the usual
-> first-build errors.
->
-> Everything else in this repo was verified before it was committed; this is
-> the exception, and it is not one to paper over. See **Building** for what the
-> image needs.
+## Build status
+
+Built and signed. `gradle assembleDebug` in the `claude-android` image
+produces `app/build/outputs/apk/debug/app-debug.apk`:
+
+| | |
+|---|---|
+| package | `org.pgo.minimal`, versionCode 1, versionName 0.1 |
+| size | 5.7 MB |
+| SDK | minSdk 26, targetSdk 34, compileSdk 34 |
+| activity | `org.pgo.minimal.MainActivity` |
+| signature | APK Signature Scheme v2, debug certificate |
+
+It compiled first time, which is luck as much as care — it was written before
+the toolchain existed and had never been near a compiler. **It has not been run
+on a device or an emulator**, so the build is proof that it assembles, not that
+it behaves. The layout in particular is unproven: `style="@style/Panel"`
+supplying `layout_width`/`layout_height`, and two `<include>`s of the same card
+layout resolving to separate view bindings, both work in theory.
 
 Named `prototype-minimal-apk` because `prototype-apk` is already the Android
 port of `prototype-arti`.
@@ -38,37 +47,45 @@ cards, and a `[group1]` ECDSA P-256 keypair for every new account.
 
 ## Building
 
-The image needs a JDK and the Android SDK. Neither is in the container today —
-add them to the Dockerfile rather than installing by hand, so they ship with
-the image:
+Use the **`claude-android`** image (`Dockerfile.android` in the
+claude-code-docker repo): Temurin JDK 21, Android SDK with platforms 34 & 36,
+build-tools 34.0.0 & 36.0.0, and Gradle 8.7. Point the workspace at it in
+`workspaces.conf`:
 
-```dockerfile
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        openjdk-17-jdk-headless unzip && rm -rf /var/lib/apt/lists/*
-
-ENV ANDROID_HOME=/opt/android-sdk
-RUN mkdir -p $ANDROID_HOME/cmdline-tools && cd /tmp \
- && curl -fsSLO https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip \
- && unzip -q commandlinetools-linux-*.zip -d $ANDROID_HOME/cmdline-tools \
- && mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest \
- && yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses \
- && $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-      "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-ENV PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+```
+game  /home/gaming/git-werkmap/PickupGameOrganizer/  claude-android
 ```
 
-No NDK is needed — there is no native code here, unlike `prototype-apk`.
-
-Then:
+Then, from this directory:
 
 ```sh
-./gradlew assembleDebug
+gradle --no-daemon assembleDebug
 # app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`gradle-wrapper.jar` is **not** committed (the sibling project does the same),
-so `./gradlew` needs the jar restoring first — `gradle wrapper` with a system
-Gradle, or opening the project once in Android Studio.
+`gradle-wrapper.jar` is not committed (the sibling project does the same), so
+`./gradlew` needs it restoring first — `gradle wrapper` regenerates it. Using
+the system Gradle directly, as above, skips that entirely.
+
+Gradle's cache and the debug keystore live under `$HOME`, which is a mounted
+volume, so dependencies download once and every debug APK keeps the same
+signing key.
+
+<details>
+<summary>What was added to the image</summary>
+
+`Dockerfile.android` in the claude-code-docker repo — the Android half of
+`Dockerfile.flutter` without Flutter/Dart, stacked on `claude-code-agent-jvm-base`
+for the JDK. Android SDK cmdline-tools, platform-tools, platforms 34 & 36,
+build-tools 34.0.0 & 36.0.0, and Gradle 8.7, with a build-time check that
+`aapt2`, `d8` and `apksigner` are all present.
+
+The NDK is deliberately not baked in — it is ~5 GB and only JNI projects need
+it. `/opt/android-sdk/ndk` is bind-mounted from `./android-sdk-cache/ndk`, so
+`sdkmanager "ndk;<version>"` inside a session persists across image rebuilds.
+There is no native code here, unlike `prototype-apk`.
+
+</details>
 
 ## Interoperable vaults
 
@@ -115,11 +132,12 @@ The `SharedPreferences` keys are the app's own, so nothing collides.
 - `build.gradle.kts`, `settings.gradle.kts` — AGP 8.5.2, Kotlin 1.9.24,
   compileSdk 34, minSdk 26, matching `prototype-apk`.
 
-## Still to do, once it compiles
+## Still to do
 
-- A first build, and whatever it turns up.
+- **Run it.** The APK assembles and signs; nothing has launched it. Installing
+  on a device is the next real test.
 - The differential test the WASM prototype has: run the roster port against
   prototype-minimal's own JavaScript on the same inputs. That found two real
-  bugs there and would be worth having here — it needs a JVM to run.
+  bugs there, and there is a JVM to run it on now.
 - A vault round trip against the browser, done for real rather than reasoned
   about.
