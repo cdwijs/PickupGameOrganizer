@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Minimal</string>
+
+    <string name="not_signed_in">not signed in</string>
+    <string name="sign_in">Sign in</string>
+    <string name="sign_out">Sign out</string>
+    <string name="cancel">Cancel</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="debug_icon">🔍🐛</string>
+    <string name="debug_toggle_desc">Show or hide the encrypted and decrypted user data</string>
+
+    <string name="encrypted_user_data">Encrypted user data</string>
+    <string name="decrypted_user_data">Decrypted user data</string>
+    <string name="agenda">Agenda</string>
+    <string name="paste_roster">Paste roster</string>
+    <string name="updated_roster">Updated roster</string>
+
+    <string name="empty">empty</string>
+    <string name="dash">—</string>
+    <string name="zero">0</string>
+    <string name="players">players</string>
+    <string name="club_name">Terrible Football Haarlem</string>
+    <string name="going">Going</string>
+    <string name="not_going">Not going</string>
+
+    <string name="copy_clipboard">Copy to clipboard</string>
+    <string name="paste_clipboard">Paste from clipboard</string>
+    <string name="clear">Clear</string>
+    <string name="unlock">Unlock</string>
+    <string name="delete_this_user">Delete this user</string>
+    <string name="delete_all_users">Delete all users</string>
+
+    <string name="vault_hint">No users yet. Sign in and answer &quot;Create&quot; to add one, or paste blobs from another device here.</string>
+    <string name="vault_note">Each entry carries its own salt next to its blob — a blob without its salt cannot be decrypted. Nothing here reveals a username or a password.</string>
+    <string name="plain_placeholder">Nothing decrypted. Sign in to unlock a blob; the plaintext appears here.</string>
+    <string name="plain_locked">Locked. Press Unlock and enter your password to see the plaintext.</string>
+    <string name="plain_note">Read-only, and never stored in the clear — this is the plaintext held in memory for the current sign-in. Restarting the app keeps the session but not the key, so it has to be unlocked again.</string>
+    <string name="paste_hint">Paste the roster message here… Parsing extracts the first two 🗓️ date blocks and their player lists. The cards above update as soon as you paste.</string>
+    <string name="out_placeholder">The updated roster appears here.</string>
+    <string name="signin_note">Signing in tries every stored blob with this password and keeps the one whose encrypted username matches; a new username offers to create a user.</string>
+
+    <string name="working">Working…</string>
+    <string name="wrong_credentials">Incorrect username or password.</string>
+    <string name="wrong_password">Incorrect password.</string>
+</resources>

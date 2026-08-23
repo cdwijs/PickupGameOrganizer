@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two views in one screen, the same split the web prototype uses: the main
+     view, and a sign-in form that is only visible when asked for. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg">
+
+    <!-- ============================ main view ============================ -->
+    <ScrollView
+        android:id="@+id/mainView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="12dp"
+        android:clipToPadding="false">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- account -->
+            <LinearLayout style="@style/Panel">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/accountStatus"
+                        style="@style/Pill"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="@string/not_signed_in" />
+
+                    <!-- Magnifier and bug: folds the two diagnostic panels away. -->
+                    <Button
+                        android:id="@+id/debugBtn"
+                        style="@style/SecondaryButton"
+                        android:layout_width="wrap_content"
+                        android:minWidth="0dp"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:text="@string/debug_icon"
+                        android:contentDescription="@string/debug_toggle_desc" />
+
+                    <Button
+                        android:id="@+id/accountBtn"
+                        style="@style/PrimaryButton"
+                        android:layout_width="wrap_content"
+                        android:text="@string/sign_in" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- the two diagnostic panels, folded as one unit -->
+            <LinearLayout
+                android:id="@+id/debugPanel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout style="@style/Panel">
+                    <LinearLayout style="@style/PanelHeader">
+                        <TextView style="@style/PanelTitle" android:text="@string/encrypted_user_data" />
+                        <TextView android:id="@+id/vaultStatus" style="@style/Pill" android:text="@string/empty" />
+                    </LinearLayout>
+
+                    <EditText
+                        android:id="@+id/vaultBox"
+                        style="@style/CodeBox"
+                        android:hint="@string/vault_hint"
+                        android:importantForAutofill="no"
+                        android:inputType="textMultiLine" />
+
+                    <LinearLayout style="@style/ButtonRow">
+                        <Button android:id="@+id/vaultCopy" style="@style/PrimaryButton" android:text="@string/copy_clipboard" />
+                        <Button android:id="@+id/vaultPaste" style="@style/SecondaryButton" android:text="@string/paste_clipboard" />
+                    </LinearLayout>
+                    <LinearLayout style="@style/ButtonRow">
+                        <Button android:id="@+id/deleteUser" style="@style/DangerButton" android:text="@string/delete_this_user" />
+                        <Button android:id="@+id/deleteAll" style="@style/DangerButton" android:text="@string/delete_all_users" />
+                    </LinearLayout>
+
+                    <TextView style="@style/Hint" android:text="@string/vault_note" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/Panel">
+                    <LinearLayout style="@style/PanelHeader">
+                        <TextView style="@style/PanelTitle" android:text="@string/decrypted_user_data" />
+                        <TextView android:id="@+id/plainStatus" style="@style/Pill" android:text="@string/dash" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/plainBox"
+                        style="@style/CodeBox"
+                        android:textIsSelectable="true"
+                        android:text="@string/plain_placeholder" />
+
+                    <Button
+                        android:id="@+id/unlockBtn"
+                        style="@style/PrimaryButton"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/unlock"
+                        android:visibility="gone" />
+
+                    <TextView style="@style/Hint" android:text="@string/plain_note" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- agenda -->
+            <LinearLayout style="@style/Panel">
+                <LinearLayout style="@style/PanelHeader">
+                    <TextView style="@style/PanelTitle" android:text="@string/agenda" />
+                </LinearLayout>
+
+                <include android:id="@+id/card0" layout="@layout/game_card" />
+                <include android:id="@+id/card1" layout="@layout/game_card" />
+            </LinearLayout>
+
+            <!-- paste roster -->
+            <LinearLayout style="@style/Panel">
+                <LinearLayout style="@style/PanelHeader">
+                    <TextView style="@style/PanelTitle" android:text="@string/paste_roster" />
+                    <TextView android:id="@+id/parseStatus" style="@style/Pill" android:text="@string/empty" />
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/pasteIn"
+                    style="@style/CodeBox"
+                    android:hint="@string/paste_hint"
+                    android:importantForAutofill="no"
+                    android:inputType="textMultiLine" />
+
+                <LinearLayout style="@style/ButtonRow">
+                    <Button android:id="@+id/pasteBtn" style="@style/PrimaryButton" android:text="@string/paste_clipboard" />
+                    <Button android:id="@+id/clearBtn" style="@style/SecondaryButton" android:text="@string/clear" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- updated roster -->
+            <LinearLayout style="@style/Panel">
+                <LinearLayout style="@style/PanelHeader">
+                    <TextView style="@style/PanelTitle" android:text="@string/updated_roster" />
+                    <TextView android:id="@+id/outStatus" style="@style/Pill" android:text="@string/dash" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/pasteOut"
+                    style="@style/CodeBox"
+                    android:textIsSelectable="true"
+                    android:text="@string/out_placeholder" />
+
+                <LinearLayout style="@style/ButtonRow">
+                    <Button android:id="@+id/copyBtn" style="@style/PrimaryButton" android:text="@string/copy_clipboard" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- =========================== sign-in view ========================== -->
+    <ScrollView
+        android:id="@+id/signinView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <LinearLayout style="@style/Panel">
+            <LinearLayout style="@style/PanelHeader">
+                <TextView style="@style/PanelTitle" android:text="@string/sign_in" />
+            </LinearLayout>
+
+            <TextView style="@style/Label" android:text="@string/username" />
+            <EditText
+                android:id="@+id/usernameInput"
+                style="@style/Field"
+                android:autofillHints="username"
+                android:inputType="text"
+                android:imeOptions="actionNext" />
+
+            <TextView style="@style/Label" android:text="@string/password" />
+            <EditText
+                android:id="@+id/passwordInput"
+                style="@style/Field"
+                android:autofillHints="password"
+                android:inputType="textPassword"
+                android:imeOptions="actionDone" />
+
+            <Button
+                android:id="@+id/signinSubmit"
+                style="@style/PrimaryButton"
+                android:layout_width="match_parent"
+                android:layout_marginTop="12dp"
+                android:text="@string/sign_in" />
+
+            <Button
+                android:id="@+id/signinCancel"
+                style="@style/SecondaryButton"
+                android:layout_width="match_parent"
+                android:layout_marginTop="8dp"
+                android:text="@string/cancel" />
+
+            <TextView style="@style/Hint" android:text="@string/signin_note" />
+        </LinearLayout>
+    </ScrollView>
+</FrameLayout>

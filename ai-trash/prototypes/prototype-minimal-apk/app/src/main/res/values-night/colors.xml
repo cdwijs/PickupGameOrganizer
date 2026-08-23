@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4. The theme is DayNight, so without these the panels stayed white while
+     the system text went light. Same dark palette as the web prototype. -->
+<resources>
+    <color name="bg">#14161A</color>
+    <color name="panel">#1C1F26</color>
+    <color name="border">#2C313A</color>
+    <color name="text">#E6E8EB</color>
+    <color name="muted">#9AA3AF</color>
+    <color name="accent">#4D7CFF</color>
+    <color name="accent_text">#FFFFFF</color>
+    <color name="ok">#3FB950</color>
+    <color name="err">#FF7B72</color>
+    <color name="code_bg">#23272F</color>
+</resources>

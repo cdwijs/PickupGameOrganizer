@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The web prototype's palette, so the two look like the same app. -->
+    <color name="bg">#EEF1F5</color>
+    <color name="panel">#FFFFFF</color>
+    <color name="border">#E2E8F0</color>
+    <color name="text">#0F172A</color>
+    <color name="muted">#64748B</color>
+    <color name="accent">#3B6EF0</color>
+    <color name="accent_text">#FFFFFF</color>
+    <color name="ok">#16A34A</color>
+    <color name="err">#D73A49</color>
+    <color name="code_bg">#F1F5F9</color>
+</resources>
