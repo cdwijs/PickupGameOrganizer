@@ -1,0 +1,13 @@
+{
+  "name": "WebAssembly Prototype",
+  "short_name": "WASM",
+  "description": "prototype-minimal with every rule and primitive written in C.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef1f5",
+  "theme_color": "#3b6ef0",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
