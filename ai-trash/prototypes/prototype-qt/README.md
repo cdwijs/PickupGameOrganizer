@@ -134,6 +134,66 @@ the working build used and what the script finds on its own. The real fix is
 one line in `Dockerfile.qt` — `ARG EMSDK_VERSION=3.1.50`, the version its own
 comment claims it pins — after which that copy can be deleted.
 
+## Why 14 MB
+
+Measured on the shipped build (`wasm-names`, `wasm-oz` and `qt-size-probe`
+under `/shared/tmp/prototype-qt/` are the throwaway builds behind these
+numbers):
+
+| | |
+|---|---|
+| `counter.wasm` | 13.8 MB — 10.4 MB code, 3.3 MB data |
+| over the wire, gzipped | 5.2 MB |
+| functions | 19,510 |
+| this app's own code | ~18 kB, 0.2% of it |
+
+Where the code comes from, by the static archive each of the 19,510 functions
+was linked out of:
+
+| | |
+|---|---|
+| QtGui | 29% |
+| QtWidgets | 26% |
+| QtCore | 22% |
+| bundled harfbuzz, freetype, libjpeg, libpng, pcre2, zlib, QtSvg | 17% |
+| libc++, emscripten, the app | 6% |
+
+**It is not compiler settings.** `MinSizeRel` (`-Os`) instead of `Release`
+(`-O2`) gives 13.58 MB — 1.3% off. The size is decided by how much of Qt the
+link graph reaches, not by how tightly it is compiled.
+
+**It is not this app, and it is not Widgets alone.** Qt for wasm has a floor,
+and it is high: `QCoreApplication` plus one `qDebug()` is 2.5 MB, and
+`QGuiApplication` plus a `QWindow` is 8.9 MB. Widgets adds the last 4.9 MB.
+
+**It is everything a `QApplication` can reach.** Dead-code elimination happens
+at function level, and a function stays if anything reaches it — so linked into
+this two-widget app are `QFileDialog`, `QGraphicsScene`, `QXmlStreamReader`,
+the HTML importer and exporter for `QTextDocument`, `QStyleSheetStyle`, the RHI
+OpenGL backend and its shader compiler, the JPEG *encoder*, and harfbuzz's full
+shaping machinery including the Indic and Universal Shaping Engine syllable
+tables. A `QApplication` constructs a style, `QFusionStyle` and `QCommonStyle`
+draw every widget class there is, the text stack pulls harfbuzz and freetype
+and the whole document model, and the image formats are registered in both
+directions. Nothing here is reachable *by this program*, but all of it is
+reachable *in the graph*.
+
+The 3.3 MB data section is the same story in constants: the bundled DejaVu
+font, Unicode and locale and currency tables, freetype's glyph-name tables, the
+Qt logo and the *About Qt* text.
+
+So the levers, in order of what they actually buy:
+
+- Serve it compressed. 13.8 MB becomes 5.2 MB gzipped for one line of server
+  config, and this is the only lever that costs nothing.
+- Build Qt from source with the features cut (`-no-feature-…`, the "Qt Lite"
+  route). This is the only way to get at the 75% of the binary that is Qt
+  subsystems this app never calls, and it means owning a Qt build.
+- Don't put Qt Widgets on the web. `prototype-webassembly` is a bigger app than
+  this one in 47 kB of hand-written C — a factor of 300. Qt's value here is the
+  Linux and Android targets sharing the source; the PWA is the target where the
+  bill comes due.
+
 ## Tests
 
 ```sh
@@ -187,10 +247,6 @@ which it has done twice in the 6.x series.
   build. It is debug-signed, which is enough for `adb
   install` and no use for a store: a release APK needs `androiddeployqt
   --release --sign <keystore> <alias>`, and the keystore is not in the repo.
-- 14 MB of WebAssembly for one button is the honest price of Qt Widgets on the
-  web — the whole widget set, its style, and a font stack. `prototype-webassembly`
-  does more than this in 47 kB of hand-written C, which is the comparison worth
-  keeping in mind before Qt is chosen for the web target.
 - `Dockerfile.qt` also carries an MXE toolchain for a static Windows `.exe`.
   `build.sh` has no `windows` target; adding one is a fourth call to `cmake`
   with `$MXE_ROOT/usr/$MXE_TARGET/qt6/lib/cmake` in `CMAKE_PREFIX_PATH`.
