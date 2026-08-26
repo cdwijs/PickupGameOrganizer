@@ -1,0 +1,14 @@
+{
+  "name": "Qt counter",
+  "short_name": "Qt counter",
+  "description": "prototype-qt as a PWA: one button, one textbox counting the presses, compiled from C++ to WebAssembly.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#14161a",
+  "theme_color": "#41cd52",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
