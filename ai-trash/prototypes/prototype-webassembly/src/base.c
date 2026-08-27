@@ -43,7 +43,11 @@ int str_eq(const char *a, const char *b) {
 }
 
 // clang lowers struct copies and array initialisers to these, so a freestanding
-// build has to provide them even though nothing here calls them by name.
+// build has to provide them even though nothing here calls them by name. A
+// hosted build has them already — prototype-minimal-qt compiles these sources
+// against a libc and defines PROTO_HOSTED so they are not defined twice.
+#ifndef PROTO_HOSTED
+
 void *memcpy(void *d, const void *s, usize n) { return mem_copy(d, s, n); }
 void *memset(void *d, int v, usize n) { return mem_set(d, v, n); }
 void *memmove(void *dst, const void *src, usize n) {
@@ -57,6 +61,8 @@ void *memmove(void *dst, const void *src, usize n) {
   }
   return dst;
 }
+
+#endif  // PROTO_HOSTED
 
 // ---- arena ---------------------------------------------------------------
 //
