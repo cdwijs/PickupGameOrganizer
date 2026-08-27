@@ -166,6 +166,10 @@ QWidget *MainWindow::buildMainView()
 
         m_userdataBox = new QPlainTextEdit;
         m_userdataBox->setObjectName(QStringLiteral("userdata-box"));
+        // Hex blobs and JSON: predictive text has nothing useful to add, and
+        // a composing box paints its placeholder underneath the text being
+        // composed.
+        m_userdataBox->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
         m_userdataBox->setPlaceholderText(
                 tr("No users yet. Sign in and answer \"Create\" to add one, or paste blobs "
                    "from another device here."));
@@ -253,6 +257,7 @@ QWidget *MainWindow::buildMainView()
     v->addWidget(heading(tr("Paste roster"), &m_parseStatus, tr("empty")));
     m_pasteIn = new QPlainTextEdit;
     m_pasteIn->setObjectName(QStringLiteral("paste-in"));
+    m_pasteIn->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
     m_pasteIn->setPlaceholderText(
             tr("Paste the roster message here… Parsing extracts the first two 🗓️ date blocks "
                "and their player lists. The cards above update as soon as you paste."));
@@ -372,7 +377,15 @@ QWidget *MainWindow::buildSignInView()
 
     v->addWidget(new QLabel(tr("Username")));
     m_usernameInput = new QLineEdit;
-        m_usernameInput->setObjectName(QStringLiteral("signin-username"));
+    m_usernameInput->setObjectName(QStringLiteral("signin-username"));
+    // Android's keyboard composes text before committing it, and a composing
+    // QLineEdit shows nothing until the composition ends — typing into this
+    // field looked dead until focus moved away, at which point everything
+    // typed appeared at once. The password field never had the problem
+    // because QLineEdit adds these hints itself for any echo mode that is not
+    // Normal. This is also what prototype-minimal asks the browser for on the
+    // same field: autocapitalize="none", autocorrect="off", spellcheck="false".
+    m_usernameInput->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
     v->addWidget(m_usernameInput);
 
     v->addWidget(new QLabel(tr("Password")));

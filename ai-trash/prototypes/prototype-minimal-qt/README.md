@@ -81,22 +81,36 @@ Three deviations, all of them forced, none of them in the rules:
   asks `QFontMetrics::inFontUcs4()` first and falls back to the label `debug`;
   the 🗓️ and ⚽ inside pasted roster text are still tofu there.
 
-## Asking for the soft keyboard
+## Typing on Android
 
-Android raises the keyboard only when the platform is asked to, and for a
-while nothing here asked. A programmatic `setFocus()` is not a tap, so the
-focus this app puts in the username field on opening the sign-in view did not
-ask; and a tap on a field that *already* holds focus changes no focus, so that
-did not ask either. The form could not be typed into on a phone — while
-long-press **Paste** still filled it, because that is the context menu and not
-the keyboard.
+Two things had to be fixed before the sign-in form could be filled in on a
+phone, and only the second one was the real bug.
 
-So `focusField()` calls `QInputMethod::show()` alongside every programmatic
-focus, and an event filter on the four editable widgets asks again on every tap
-and focus-in, which is also how the keyboard comes back after being dismissed.
-The activity is `android:windowSoftInputMode="adjustResize"` and the sign-in
-view sits in its own `QScrollArea`, so the keyboard shortens the form rather
-than covering it. None of this does anything on desktop.
+**The keyboard has to be asked for.** Android raises it only on request. A
+programmatic `setFocus()` is not a tap, and a tap on a field that already holds
+focus changes no focus, so neither route reached the platform.
+`focusField()` now calls `QInputMethod::show()` with every programmatic focus,
+and an event filter on the four editable widgets asks again on tap and
+focus-in, which is also how the keyboard comes back after being dismissed. The
+activity is `android:windowSoftInputMode="adjustResize"` and the sign-in view
+has its own `QScrollArea`, so the keyboard shortens the form rather than
+covering it.
+
+**The username field looked dead while typing.** Characters went in and nothing
+appeared; moving focus to the password field made everything typed show up at
+once in the username box. Android's keyboard *composes* text before committing
+it, and the composing string was not being drawn — so the field stayed empty
+until the composition was committed, which is what a focus change does. The
+password field never had the problem, because `QLineEdit` adds
+`ImhNoAutoUppercase | ImhNoPredictiveText | ImhSensitiveData` itself for any
+echo mode that is not `Normal`. The same hints are now set explicitly on the
+username field, the vault box and the paste box — which is also what
+prototype-minimal asks the browser for on its username input
+(`autocapitalize="none" autocorrect="off" spellcheck="false"`), and what
+stopped typed text from being painted on top of the placeholder in the paste
+box.
+
+None of this does anything on desktop.
 
 ## Dialogs are asynchronous, and have to be
 
