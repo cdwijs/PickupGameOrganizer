@@ -4,9 +4,12 @@
 #include "storage.h"
 
 #include <QApplication>
+#include <QEvent>
 #include <QFontMetrics>
 #include <QFrame>
+#include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QInputMethod>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -53,6 +56,19 @@ QWidget *heading(const QString &title, QLabel **pillOut, const QString &pillText
     return row;
 }
 
+// Android raises the soft keyboard only when the platform is asked to, and
+// nothing here was asking. A programmatic setFocus() is not a tap, so it does
+// not ask; and a tap on a field that already holds focus changes no focus, so
+// that does not ask either. Between them the sign-in form could not be typed
+// into on a phone — while long-press Paste still worked, because that is the
+// context menu rather than the keyboard. Every route into a text widget now
+// asks explicitly. A no-op on desktop, where there is no software keyboard.
+void openSoftKeyboard()
+{
+    if (QInputMethod *im = QGuiApplication::inputMethod())
+        im->show();
+}
+
 QFrame *separator()
 {
     auto *line = new QFrame;
@@ -77,6 +93,12 @@ MainWindow::MainWindow(QWidget *parent)
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
     outer->addWidget(m_views);
+
+    for (QWidget *input : { static_cast<QWidget *>(m_usernameInput),
+                            static_cast<QWidget *>(m_passwordInput),
+                            static_cast<QWidget *>(m_userdataBox),
+                            static_cast<QWidget *>(m_pasteIn) })
+        input->installEventFilter(this);
 
     restoreSession();
     render();
@@ -380,7 +402,14 @@ QWidget *MainWindow::buildSignInView()
         m_unlockTargetId.clear();
         showSignIn(false);
     });
-    return page;
+
+    // The soft keyboard takes half the screen; the form has to be reachable
+    // under it.
+    auto *scroll = new QScrollArea;
+    scroll->setWidget(page);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    return scroll;
 }
 
 // ---- dialogs ----------------------------------------------------------------
@@ -528,8 +557,26 @@ void MainWindow::showSignIn(bool show, bool focusPassword)
     m_views->setCurrentIndex(show ? 1 : 0);
     if (show) {
         QLineEdit *field = focusPassword ? m_passwordInput : m_usernameInput;
-        QTimer::singleShot(0, field, qOverload<>(&QWidget::setFocus));
+        // After the view switch, so the field is on screen when it takes focus.
+        QTimer::singleShot(0, this, [this, field] { focusField(field); });
     }
+}
+
+void MainWindow::focusField(QLineEdit *field)
+{
+    field->setFocus();
+    openSoftKeyboard();
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    // A tap on an already-focused field produces no focus change, so this is
+    // the only chance to bring the keyboard back after it has been dismissed.
+    if (event->type() == QEvent::MouseButtonRelease || event->type() == QEvent::FocusIn) {
+        if (auto *widget = qobject_cast<QWidget *>(watched); widget && widget->isEnabled())
+            openSoftKeyboard();
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void MainWindow::setSignInBusy(bool busy)
@@ -656,12 +703,12 @@ void MainWindow::submitSignIn()
     const QString password = m_passwordInput->text();
     if (username.isEmpty()) {
         notify(tr("Sign in"), tr("Username can not be empty."));
-        m_usernameInput->setFocus();
+        focusField(m_usernameInput);
         return;
     }
     if (password.isEmpty()) {
         notify(tr("Sign in"), tr("Password can not be empty."));
-        m_passwordInput->setFocus();
+        focusField(m_passwordInput);
         return;
     }
     attemptSignIn(username, password, /*interactive=*/true, m_unlockTargetId,

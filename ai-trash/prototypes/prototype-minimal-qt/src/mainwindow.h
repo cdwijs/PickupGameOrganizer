@@ -33,6 +33,10 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 protected:
+    // Taps on the text widgets are watched so the soft keyboard can be asked
+    // for explicitly; see openSoftKeyboard() in the .cpp.
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
     // Every dialog the app raises goes through these two, and both are
     // asynchronous: Qt for WebAssembly cannot run the nested event loop that
     // QMessageBox::warning() and ::question() need, so a blocking dialog there
@@ -70,6 +74,7 @@ private:
     void signOutLocal();
     void setSignInBusy(bool busy);
     void showSignIn(bool show, bool focusPassword = false);
+    void focusField(QLineEdit *field);
     bool restoreSession();
 
     // ---- vault ----
