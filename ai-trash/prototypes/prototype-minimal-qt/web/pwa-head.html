@@ -8,3 +8,22 @@
       if ('serviceWorker' in navigator)
         addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
     </script>
+    <script>
+      // Opened straight from disk? Nothing will load: Qt's loader fetches the
+      // .wasm, and a browser will not fetch from file:// — Firefox reports
+      // "NetworkError when attempting to fetch resource", which says nothing
+      // about the cause. Say it here instead, and keep saying it: the shell
+      // overwrites the status line as it fails.
+      if (location.protocol === 'file:') {
+        addEventListener('DOMContentLoaded', () => {
+          const el = document.querySelector('#qtstatus');
+          if (!el) return;
+          const msg = '<b>This page has to be served over HTTP.</b><br>'
+            + 'Run <code>python3 -m http.server 8080</code> in this folder, '
+            + 'then open <code>http://localhost:8080/</code>.';
+          new MutationObserver(() => { if (el.innerHTML !== msg) el.innerHTML = msg; })
+            .observe(el, { childList: true, subtree: true, characterData: true });
+          el.innerHTML = msg;
+        });
+      }
+    </script>
