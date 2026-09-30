@@ -21,3 +21,6 @@ tmp/
 # Gradle wrapper jar is generated locally (see README)
 /prototype-apk/gradle/wrapper/gradle-wrapper.jar
 worktrees/
+
+# prototype-qt-hello: default qt-build output dirs
+/prototype-qt-hello/build-*/
