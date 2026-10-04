@@ -1,0 +1,3 @@
+[submodule "ai-trash/prototypes/prototype-minimal-qt/third_party/qtkeychain"]
+	path = ai-trash/prototypes/prototype-minimal-qt/third_party/qtkeychain
+	url = https://github.com/frankosterfeld/qtkeychain
