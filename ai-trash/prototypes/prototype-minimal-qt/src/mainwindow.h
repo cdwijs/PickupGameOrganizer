@@ -32,6 +32,13 @@ class MainWindow : public QWidget
 public:
     explicit MainWindow(QWidget *parent = nullptr);
 
+    // Where a password came from, which decides whether it is worth offering
+    // to the keyring. One that came out of the keyring is already in it, and
+    // on the PWA a write is a second modal — so an unlock from a saved
+    // password would put a "Save" form on screen the instant the "Sign In"
+    // one closed.
+    enum class PasswordSource { Typed, Keyring };
+
 protected:
     // Taps on the text widgets are watched so the soft keyboard can be asked
     // for explicitly; see openSoftKeyboard() in the .cpp.
@@ -46,6 +53,17 @@ protected:
                         std::function<void()> then = {});
     virtual void confirm(const QString &title, const QString &text,
                          std::function<void(bool)> then);
+
+    // The credential store, behind the same kind of hook and for the same
+    // reason: QtKeychain's jobs are asynchronous on every target, and on the
+    // PWA they are asynchronous because a person has to answer a form. `then`
+    // runs only when there is a password to use, the way readClipboard()
+    // does. Tests override all four so the suite never reaches — or writes
+    // into — the machine's real keyring.
+    virtual bool credentialsSilent() const;
+    virtual void readCredential(const QString &key, std::function<void(const QString &)> then);
+    virtual void writeCredential(const QString &key, const QString &password);
+    virtual void forgetCredential(const QString &key);
 
 private:
     // ---- build ----
@@ -68,9 +86,18 @@ private:
     // and a non-empty `unlockId` names one blob to open rather than searching.
     void attemptSignIn(const QString &username, const QString &password, bool interactive,
                        const QString &unlockId = QString(),
-                       std::function<void(bool)> done = {});
-    void finishSignIn(const Account &hit);
+                       std::function<void(bool)> done = {},
+                       PasswordSource source = PasswordSource::Typed);
+    void finishSignIn(const Account &hit, const QString &password, PasswordSource source);
     void submitSignIn();
+    // The two places the credential store is consulted: once at startup on a
+    // restored session, where it can be read without the user noticing, and
+    // when Unlock is pressed, which is a deliberate act and therefore the only
+    // route the PWA's modal form can take. Both are no-ops when there is
+    // nothing stored.
+    void trySavedPassword();
+    void unlock();
+    void showUnlockForm();
     void signOutLocal();
     void setSignInBusy(bool busy);
     void showSignIn(bool show, bool focusPassword = false);
@@ -107,6 +134,17 @@ private:
     QPushButton *m_accountBtn = nullptr;
     QPushButton *m_debugBtn = nullptr;
     QWidget *m_debugPanel = nullptr;
+    // TEMPORARY — the on-screen half of the repaint/IME investigation. Both
+    // "typing does not show" and "signing out takes forever" look like
+    // content-only repaints never reaching the screen; this reports what the
+    // widgets actually receive and how long the work actually takes, so the
+    // phone can answer it without adb. Remove once the cause is settled.
+    QLabel *m_diag = nullptr;
+    int m_imeCount = 0;
+    int m_keyCount = 0;
+    QString m_lastIme;
+    qint64 m_lastRenderMs = -1;
+    void updateDiag();
 
     QLabel *m_userdataStatus = nullptr;
     QPlainTextEdit *m_userdataBox = nullptr;

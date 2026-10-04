@@ -39,6 +39,15 @@ ANDROID_ABI=${ANDROID_ABI:-arm64-v8a}
 die()  { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 
+# QtKeychain is a submodule, and every target links it. A checkout without
+# --recursive leaves the directory there but empty, which CMake would only
+# report from inside add_subdirectory.
+if [ ! -f "$SRC/third_party/qtkeychain/CMakeLists.txt" ]; then
+    printf '\033[33mwarning:\033[0m third_party/qtkeychain is empty; fetching the submodule\n' >&2
+    git -C "$SRC" submodule update --init third_party/qtkeychain \
+        || die "could not fetch the qtkeychain submodule — run 'git submodule update --init' by hand"
+fi
+
 # --- argument parsing --------------------------------------------------------
 
 USE_DOCKER=0

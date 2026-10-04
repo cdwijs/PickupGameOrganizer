@@ -1,10 +1,13 @@
 #include "mainwindow.h"
 
 #include "clipboard.h"
+#include "credentials.h"
 #include "storage.h"
 
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QEvent>
+#include <QInputMethodEvent>
 #include <QFontMetrics>
 #include <QFrame>
 #include <QGuiApplication>
@@ -16,6 +19,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QStackedWidget>
@@ -100,9 +104,17 @@ MainWindow::MainWindow(QWidget *parent)
                             static_cast<QWidget *>(m_pasteIn) })
         input->installEventFilter(this);
 
-    restoreSession();
+    const bool restored = restoreSession();
     render();
     resize(520, 760);
+
+    // A restored session carries the username but not the key, so the app
+    // would start locked. This is the one moment prototype-minimal calls
+    // tryPrefill(), and the credential store is the only way to fill the
+    // decrypted box without asking. Queued rather than called: the read is
+    // asynchronous everywhere, and this window is not on screen yet.
+    if (restored)
+        QTimer::singleShot(0, this, &MainWindow::trySavedPassword);
 }
 
 // ---- construction -----------------------------------------------------------
@@ -162,14 +174,25 @@ QWidget *MainWindow::buildMainView()
         d->setSpacing(8);
 
         d->addWidget(separator());
+
+        // TEMPORARY diagnostic. See the note in mainwindow.h.
+        m_diag = new QLabel;
+        m_diag->setObjectName(QStringLiteral("diag"));
+        m_diag->setWordWrap(true);
+        m_diag->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        d->addWidget(m_diag);
+
         d->addWidget(heading(tr("Encrypted user data"), &m_userdataStatus, tr("empty")));
 
         m_userdataBox = new QPlainTextEdit;
         m_userdataBox->setObjectName(QStringLiteral("userdata-box"));
         // Hex blobs and JSON: predictive text has nothing useful to add, and
         // a composing box paints its placeholder underneath the text being
-        // composed.
-        m_userdataBox->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
+        // composed. ImhSensitiveData for the same reason as the username
+        // field — it is the hint that actually stops the composing, and Qt
+        // still applies the multi-line flag after it.
+        m_userdataBox->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText
+                                           | Qt::ImhSensitiveData);
         m_userdataBox->setPlaceholderText(
                 tr("No users yet. Sign in and answer \"Create\" to add one, or paste blobs "
                    "from another device here."));
@@ -239,12 +262,7 @@ QWidget *MainWindow::buildMainView()
         });
         connect(m_deleteUserBtn, &QPushButton::clicked, this, &MainWindow::deleteUser);
         connect(m_deleteAllBtn, &QPushButton::clicked, this, &MainWindow::deleteAll);
-        connect(m_plainUnlockBtn, &QPushButton::clicked, this, [this] {
-            m_usernameInput->setText(m_username);
-            m_passwordInput->clear();
-            m_unlockTargetId = m_userId;
-            showSignIn(true, /*focusPassword=*/true);
-        });
+        connect(m_plainUnlockBtn, &QPushButton::clicked, this, &MainWindow::unlock);
     }
     v->addWidget(m_debugPanel);
 
@@ -257,7 +275,8 @@ QWidget *MainWindow::buildMainView()
     v->addWidget(heading(tr("Paste roster"), &m_parseStatus, tr("empty")));
     m_pasteIn = new QPlainTextEdit;
     m_pasteIn->setObjectName(QStringLiteral("paste-in"));
-    m_pasteIn->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
+    m_pasteIn->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText
+                                   | Qt::ImhSensitiveData);
     m_pasteIn->setPlaceholderText(
             tr("Paste the roster message here… Parsing extracts the first two 🗓️ date blocks "
                "and their player lists. The cards above update as soon as you paste."));
@@ -379,13 +398,27 @@ QWidget *MainWindow::buildSignInView()
     m_usernameInput = new QLineEdit;
     m_usernameInput->setObjectName(QStringLiteral("signin-username"));
     // Android's keyboard composes text before committing it, and a composing
-    // QLineEdit shows nothing until the composition ends — typing into this
+    // QLineEdit paints nothing until the composition ends — typing into this
     // field looked dead until focus moved away, at which point everything
-    // typed appeared at once. The password field never had the problem
-    // because QLineEdit adds these hints itself for any echo mode that is not
-    // Normal. This is also what prototype-minimal asks the browser for on the
-    // same field: autocapitalize="none", autocorrect="off", spellcheck="false".
-    m_usernameInput->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText);
+    // typed appeared at once.
+    //
+    // ImhNoPredictiveText alone does not stop it, which is why the first
+    // attempt at this changed nothing on the phone: Qt only turns that hint
+    // into TYPE_TEXT_FLAG_NO_SUGGESTIONS when the environment variable
+    // QT_ANDROID_ENABLE_WORKAROUND_TO_DISABLE_PREDICTIVE_TEXT is set
+    // (QtEditText.isDisablePredictiveTextWorkaround in Qt6Android.jar), and
+    // nothing sets it. ImhSensitiveData needs no opt-in: Qt maps it to
+    // TYPE_TEXT_VARIATION_VISIBLE_PASSWORD, an input type keyboards do not
+    // compose in, so every character is committed as it is typed and painted
+    // immediately. It is the same reason the password field was never
+    // affected — QLineEdit adds ImhHiddenText for a non-Normal echo mode,
+    // which maps to the password input type.
+    //
+    // The hints together are also what prototype-minimal asks the browser for
+    // on this field: autocapitalize="none", autocorrect="off",
+    // spellcheck="false".
+    m_usernameInput->setInputMethodHints(Qt::ImhNoAutoUppercase | Qt::ImhNoPredictiveText
+                                         | Qt::ImhSensitiveData);
     v->addWidget(m_usernameInput);
 
     v->addWidget(new QLabel(tr("Password")));
@@ -448,6 +481,39 @@ void MainWindow::confirm(const QString &title, const QString &text,
         then(result == QMessageBox::Yes);
     });
     box->open();
+}
+
+// ---- credential store -------------------------------------------------------
+//
+// Four one-line forwards to Cred:: so the whole of the platform's keyring sits
+// behind a hook a test can replace, like the two dialogs above it.
+
+bool MainWindow::credentialsSilent() const
+{
+    return Cred::silent() && Cred::available();
+}
+
+void MainWindow::readCredential(const QString &key, std::function<void(const QString &)> then)
+{
+    // A read outlives the widget that started it: QtKeychain queues its jobs
+    // on the application, so a keyring still thinking when the window closes
+    // will answer a `this` that is gone. Both callers capture `this`, so the
+    // guard belongs here rather than in each of them.
+    QPointer<MainWindow> alive(this);
+    Cred::read(key, [alive, then = std::move(then)](const QString &password) {
+        if (alive && then)
+            then(password);
+    });
+}
+
+void MainWindow::writeCredential(const QString &key, const QString &password)
+{
+    Cred::write(key, password);
+}
+
+void MainWindow::forgetCredential(const QString &key)
+{
+    Cred::forget(key);
 }
 
 // ---- render -----------------------------------------------------------------
@@ -557,10 +623,19 @@ void MainWindow::renderRoster()
 
 void MainWindow::render()
 {
+    // TEMPORARY timing + repaint. See the note in mainwindow.h: this says
+    // whether "sign out takes a long time" is work or a missing repaint.
+    QElapsedTimer timer;
+    timer.start();
+
     renderAccount();
     renderDebug();
     renderUserData();
     renderRoster();
+
+    m_lastRenderMs = timer.elapsed();
+    updateDiag();
+    window()->update();
 }
 
 // ---- account ----------------------------------------------------------------
@@ -589,7 +664,41 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         if (auto *widget = qobject_cast<QWidget *>(watched); widget && widget->isEnabled())
             openSoftKeyboard();
     }
+
+    // TEMPORARY diagnostic + candidate fix. If the input is arriving and the
+    // screen simply is not being refreshed, the text is already in the widget
+    // by the time this runs and a full-window repaint will reveal it; the
+    // label then shows an event count that keeps climbing while the field
+    // still looks empty, which is the same finding from the other side.
+    if (event->type() == QEvent::InputMethod) {
+        auto *ime = static_cast<QInputMethodEvent *>(event);
+        ++m_imeCount;
+        m_lastIme = QStringLiteral("pre=\"%1\" commit=\"%2\"")
+                            .arg(ime->preeditString(), ime->commitString());
+        updateDiag();
+        if (auto *widget = qobject_cast<QWidget *>(watched))
+            widget->window()->update();
+    } else if (event->type() == QEvent::KeyPress) {
+        ++m_keyCount;
+        updateDiag();
+        if (auto *widget = qobject_cast<QWidget *>(watched))
+            widget->window()->update();
+    }
+
     return QWidget::eventFilter(watched, event);
+}
+
+// TEMPORARY. See the note in mainwindow.h.
+void MainWindow::updateDiag()
+{
+    if (!m_diag)
+        return;
+    m_diag->setText(QStringLiteral("ime %1 · key %2 · render %3 ms\n%4")
+                            .arg(m_imeCount)
+                            .arg(m_keyCount)
+                            .arg(m_lastRenderMs < 0 ? QStringLiteral("—")
+                                                    : QString::number(m_lastRenderMs))
+                            .arg(m_lastIme));
 }
 
 void MainWindow::setSignInBusy(bool busy)
@@ -611,7 +720,7 @@ void MainWindow::signOutLocal()
 
 void MainWindow::attemptSignIn(const QString &username, const QString &password,
                                bool interactive, const QString &unlockId,
-                               std::function<void(bool)> done)
+                               std::function<void(bool)> done, PasswordSource source)
 {
     const auto finished = [done](bool ok) {
         if (done)
@@ -643,7 +752,7 @@ void MainWindow::attemptSignIn(const QString &username, const QString &password,
             finished(false);
             return;
         }
-        finishSignIn(hit);
+        finishSignIn(hit, password, source);
         finished(true);
         return;
     }
@@ -651,7 +760,7 @@ void MainWindow::attemptSignIn(const QString &username, const QString &password,
     const Account hit = Core::signIn(vault(), username, password);
     setSignInBusy(false);
     if (hit.ok()) {
-        finishSignIn(hit);
+        finishSignIn(hit, password, source);
         finished(true);
         return;
     }
@@ -686,14 +795,14 @@ void MainWindow::attemptSignIn(const QString &username, const QString &password,
                                tr("Created, but this device would not store it — copy the "
                                   "vault out of the user-data box, it is gone on restart."));
                     }
-                    finishSignIn(made);
+                    finishSignIn(made, password, PasswordSource::Typed);
                     finished(true);
                 });
     });
 }
 
 // Everything a successful sign-in, unlock or create has in common.
-void MainWindow::finishSignIn(const Account &hit)
+void MainWindow::finishSignIn(const Account &hit, const QString &password, PasswordSource source)
 {
     m_username = hit.username;
     m_userId = hit.id;
@@ -705,9 +814,89 @@ void MainWindow::finishSignIn(const Account &hit)
     Storage::set(Storage::SESSION,
                  QString::fromUtf8(QJsonDocument(session).toJson(QJsonDocument::Compact)));
 
+    // Offer the password to the platform's keyring, exactly where
+    // prototype-minimal calls storeCredential(): after a sign-in, an unlock or
+    // a create, once the blob has proved the password right. Keyed by the
+    // stored spelling of the username rather than the typed one, so a login as
+    // "CEDRIC" does not leave a second entry behind. The write is fire and
+    // forget — a refused or missing keyring is not a failed sign-in, it only
+    // means the next start asks again. A password that came out of the keyring
+    // is not written back: it is already there, and on the PWA it would raise
+    // a "Save" form the moment the "Sign In" one closed.
+    if (!password.isEmpty() && source == PasswordSource::Typed)
+        writeCredential(hit.username, password);
+
     m_passwordInput->clear();
     showSignIn(false);
     render();
+}
+
+// Startup, on a restored session. The equivalent of prototype-minimal's
+// tryPrefill() for the case where the session is already known: look the
+// restored user up in the keyring and, if there is a password, spend one
+// derivation on it. A miss, a refusal, a keyring that is not running or a
+// password that has since been changed all end the same way — the app stays
+// locked and the Unlock button is still there.
+void MainWindow::trySavedPassword()
+{
+    if (!credentialsSilent() || m_userId.isEmpty() || !m_userData.isEmpty())
+        return;
+
+    const QString id = m_userId;
+    readCredential(m_username, [this, id](const QString &password) {
+        // The read came back from an event loop, so the app may have moved on:
+        // the user may have unlocked by hand, signed out, signed in as someone
+        // else or deleted the blob while the keyring was answering. Only the
+        // situation the read was started for is still worth acting on.
+        if (password.isEmpty() || m_userId != id || !m_userData.isEmpty()
+            || m_views->currentIndex() != 0)
+            return;
+        attemptSignIn(m_username, password, /*interactive=*/false, id, {},
+                      PasswordSource::Keyring);
+    });
+}
+
+// The Unlock button. It asks the keyring first, which is what makes the store
+// reachable on the PWA at all: there the read is a modal form, so it needs an
+// act by the user to hang off, and Unlock is that act. When the keyring has
+// nothing — or hands back a password the blob refuses — this falls through to
+// the form, which is what the button did before.
+void MainWindow::unlock()
+{
+    const QString id = m_userId;
+    if (id.isEmpty()) {
+        showUnlockForm();
+        return;
+    }
+
+    // Nothing is put on screen while the keyring is consulted. On the PWA its
+    // own form is what the user is looking at; on Linux and Android the answer
+    // comes back within an event loop turn.
+    readCredential(m_username, [this, id](const QString &password) {
+        if (m_userId != id || !m_userData.isEmpty())
+            return;             // unlocked, signed out or deleted in between
+        if (password.isEmpty()) {
+            showUnlockForm();
+            return;
+        }
+        attemptSignIn(m_username, password, /*interactive=*/false, id,
+                      [this, id](bool ok) {
+                          // A stored password the blob no longer accepts — it
+                          // was changed elsewhere, or the entry belongs to an
+                          // older vault. Ask, and the next success replaces it.
+                          if (!ok && m_userId == id && m_userData.isEmpty())
+                              showUnlockForm();
+                      },
+                      PasswordSource::Keyring);
+    });
+}
+
+void MainWindow::showUnlockForm()
+{
+    m_usernameInput->setText(m_username);
+    m_passwordInput->clear();
+    m_unlockTargetId = m_userId;
+    showSignIn(true, /*focusPassword=*/true);
 }
 
 void MainWindow::submitSignIn()
@@ -805,6 +994,8 @@ void MainWindow::deleteUser()
             [this](bool yes) {
                 if (!yes || m_userId.isEmpty())
                     return;
+                // Before signOutLocal(), which is what forgets the username.
+                forgetCredential(m_username);
                 saveVault(Core::remove(vault(), m_userId));
                 signOutLocal();
                 render();
@@ -824,6 +1015,13 @@ void MainWindow::deleteAll()
             [this](bool yes) {
                 if (!yes)
                     return;
+                // Only the signed-in user's saved password can be cleared
+                // here, because only their name is known: the vault stores
+                // every username encrypted inside its own blob, so there is
+                // nothing to enumerate. A second user's entry is left behind
+                // with no blob left to open — see README.md.
+                if (!m_username.isEmpty())
+                    forgetCredential(m_username);
                 saveVault(QStringLiteral("[]"));
                 signOutLocal();
                 render();

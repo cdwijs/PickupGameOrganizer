@@ -77,14 +77,18 @@ Harnesses build into `/shared/tmp/prototype-webassembly` (override with
 
 | | |
 |---|---|
-| PBKDF2, 310 000 iterations | ~560 ms |
+| PBKDF2, 310 000 iterations | ~320 ms |
 | ECDSA P-256 keypair | ~0.5 ms |
 
 The derivation is the one you feel: WebCrypto does the same work in native code
 in a fraction of that, so signing in here is visibly slower than in
 `prototype-minimal` — and sign-in pays it once per stored blob, because the
 username is inside the ciphertext and there is nothing public to look up on.
-This is a plain portable implementation with no SIMD and no assembly.
+This is a plain portable implementation with no SIMD and no assembly. The one
+optimisation it does make is to hash the two padded HMAC key blocks once and
+copy the state per iteration, since the key is the password throughout: two
+SHA-256 compressions per iteration instead of four, which is where the earlier
+~560 ms went.
 
 ## The interface
 

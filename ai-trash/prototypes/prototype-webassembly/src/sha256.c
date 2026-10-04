@@ -135,23 +135,29 @@ void hmac_sha256(const u8 *key, usize keylen, const u8 *msg, usize msglen, u8 ou
 }
 
 // PBKDF2 with dkLen == 32, which is the only size this app asks for: one
-// block, so no outer loop over blocks. The inner HMAC key is the password
-// throughout, so the padded key blocks could be hoisted — left plain because
-// the win is small next to 620 000 compressions and the clarity is worth more.
+// block, so no outer loop over blocks. The HMAC key is the password for every
+// iteration, so the two padded key blocks are hashed once here and the state
+// copied per iteration: two compressions each instead of four. An earlier note
+// here called that win small — it is a straight halving, and on a phone the
+// difference is seconds.
 void pbkdf2_sha256(const u8 *pw, usize pwlen, const u8 *salt, usize saltlen,
                    u32 iterations, u8 out[32]) {
   u8 block[4] = {0, 0, 0, 1};
   u8 u[32], t[32];
 
-  Hmac h;
-  hmac_sha256_init(&h, pw, pwlen);
+  Hmac key;
+  hmac_sha256_init(&key, pw, pwlen);
+
+  Hmac h = key;
   hmac_sha256_update(&h, salt, saltlen);
   hmac_sha256_update(&h, block, 4);
   hmac_sha256_final(&h, u);
   mem_copy(t, u, 32);
 
   for (u32 i = 1; i < iterations; i++) {
-    hmac_sha256(pw, pwlen, u, 32, u);
+    h = key;
+    hmac_sha256_update(&h, u, 32);
+    hmac_sha256_final(&h, u);
     for (int j = 0; j < 32; j++) t[j] ^= u[j];
   }
   mem_copy(out, t, 32);

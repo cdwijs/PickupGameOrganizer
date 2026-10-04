@@ -5,19 +5,44 @@
 // the same way prototype-minimal's does.
 
 #include "core.h"
+#include "credentials.h"
 #include "mainwindow.h"
 #include "storage.h"
 
+#include <QHash>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QStandardPaths>
 #include <QTest>
 
 #include <functional>
 
 namespace {
+
+// A stand-in for the platform keyring. It belongs to the device rather than to
+// a window, like Storage, so it survives the restarts the suite fakes by
+// destroying one Window and building the next. The real one is never touched:
+// a suite that wrote into the machine's GNOME Keyring would leave the tester's
+// own passwords behind, and on a build machine there is no keyring at all.
+namespace Keyring {
+QHash<QString, QString> store;
+QStringList reads;
+int writes = 0;
+// Whether a read can happen without the user noticing — true on Linux and
+// Android, false on the PWA, where QtKeychain's backend is a modal form.
+bool silent = true;
+
+void reset()
+{
+    store.clear();
+    reads.clear();
+    writes = 0;
+    silent = true;
+}
+} // namespace Keyring
 
 const char *const SAMPLE = R"(⚽ Terrible Football Haarlem
 🕖 19.00 ~ 21:00
@@ -62,6 +87,22 @@ protected:
         notices << text;
         then(answer);
     }
+
+    // The keyring, answering at once. QtKeychain is asynchronous on every
+    // target, so the app is written to cope with a late answer; a test that
+    // had to wait for one would be a test about timers.
+    bool credentialsSilent() const override { return Keyring::silent; }
+    void readCredential(const QString &key, std::function<void(const QString &)> then) override
+    {
+        Keyring::reads << key;
+        then(Keyring::store.value(key));
+    }
+    void writeCredential(const QString &key, const QString &password) override
+    {
+        ++Keyring::writes;
+        Keyring::store.insert(key, password);
+    }
+    void forgetCredential(const QString &key) override { Keyring::store.remove(key); }
 };
 
 } // namespace
@@ -90,6 +131,11 @@ private:
 
     static QString vault() { return Storage::get(Storage::VAULT); }
 
+    // The credential read at startup is queued, because at that point the
+    // window does not exist yet and the real read is asynchronous. A fake
+    // restart has to let that queue run.
+    static void settle() { QCoreApplication::processEvents(); }
+
 private slots:
     void init();
 
@@ -101,6 +147,14 @@ private slots:
     void pastedVaultIsMerged();
     void rosterParsesAndTogglesGoing();
     void deleteAllEmptiesTheVault();
+
+    void signingInSavesThePasswordInTheKeyring();
+    void savedPasswordUnlocksOnRestart();
+    void aStoreThatIsNotSilentIsLeftForTheUnlockButton();
+    void unlockUsesTheSavedPassword();
+    void aStalePasswordFallsBackToTheForm();
+    void deletingAUserForgetsItsSavedPassword();
+    void aRealReadAlwaysCallsBack();
 };
 
 void TestMinimal::init()
@@ -109,6 +163,7 @@ void TestMinimal::init()
     Storage::remove(Storage::VAULT);
     Storage::remove(Storage::SESSION);
     Storage::remove(Storage::DEBUG);
+    Keyring::reset();
 }
 
 void TestMinimal::createsAUserAndSignsIn()
@@ -168,7 +223,13 @@ void TestMinimal::sessionSurvivesRestartButTheKeyDoesNot()
         Window w;
         signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
     }
+    // On a device with nothing in the keyring: what this checks is that the
+    // key is not part of the session. The saved-password path, which does get
+    // the plaintext back without asking, has its own tests below.
+    Keyring::reset();
+
     Window fresh;                            // a restart
+    settle();
     QVERIFY(find<QLabel>(fresh, "account-status")->text().contains(QStringLiteral("Cedric")));
     QVERIFY(find<QPlainTextEdit>(fresh, "plain-box")->toPlainText().isEmpty());
 
@@ -185,7 +246,10 @@ void TestMinimal::unlockRefillsThePlaintext()
         Window w;
         signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
     }
+    Keyring::reset();                        // nothing saved, so Unlock has to ask
+
     Window w;
+    settle();
     QTest::mouseClick(find<QPushButton>(w, "debug-btn"), Qt::LeftButton);   // open the fold
     QTest::mouseClick(find<QPushButton>(w, "plain-unlock"), Qt::LeftButton);
     // Unlock opens the form on the password field with the user already filled.
@@ -265,6 +329,162 @@ void TestMinimal::deleteAllEmptiesTheVault()
     QCOMPARE(Core::count(vault()), 0);
     QCOMPARE(find<QLabel>(w, "account-status")->text(), QStringLiteral("not signed in"));
     QVERIFY(!find<QPushButton>(w, "delete-all")->isEnabled());
+
+    // Only the signed-in user's saved password goes with the blobs. Cedric's
+    // stays, because the vault keeps every username encrypted inside its own
+    // blob and there is no way to name the other users — see README.md.
+    QVERIFY(!Keyring::store.contains(QStringLiteral("Alex")));
+    QVERIFY(Keyring::store.contains(QStringLiteral("Cedric")));
+}
+
+// ---- the credential store ---------------------------------------------------
+
+void TestMinimal::signingInSavesThePasswordInTheKeyring()
+{
+    Window w;
+    signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
+    QCOMPARE(Keyring::store.value(QStringLiteral("Cedric")), QStringLiteral("hunter2"));
+
+    // Keyed by the spelling the blob holds, not the one that was typed, so
+    // signing in as CEDRIC does not leave a second entry behind.
+    QTest::mouseClick(find<QPushButton>(w, "account-btn"), Qt::LeftButton);
+    signIn(w, QStringLiteral("CEDRIC"), QStringLiteral("hunter2"));
+    QCOMPARE(Keyring::store.size(), 1);
+    QVERIFY(Keyring::store.contains(QStringLiteral("Cedric")));
+}
+
+void TestMinimal::savedPasswordUnlocksOnRestart()
+{
+    {
+        Window w;
+        signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
+    }
+    Window fresh;                            // a restart, keyring intact
+    settle();
+
+    // What prototype-minimal's tryPrefill() does on a page load: the session
+    // names the user, the keyring hands back the password, and the app spends
+    // one derivation on it. No form, no notice, nothing to press.
+    QVERIFY(find<QPlainTextEdit>(fresh, "plain-box")->toPlainText().contains(
+            QStringLiteral("Readable: Cedric")));
+    QVERIFY(fresh.notices.isEmpty());
+    QCOMPARE(Keyring::reads, QStringList{ QStringLiteral("Cedric") });
+    QTest::mouseClick(find<QPushButton>(fresh, "debug-btn"), Qt::LeftButton);
+    QVERIFY(!find<QPushButton>(fresh, "plain-unlock")->isVisibleTo(&fresh));
+}
+
+void TestMinimal::aStoreThatIsNotSilentIsLeftForTheUnlockButton()
+{
+    {
+        Window w;
+        signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
+    }
+    Keyring::silent = false;                 // the PWA: a read is a modal form
+
+    Window fresh;
+    settle();
+    // Nothing was asked of the store, so nothing was put in the user's way on
+    // a page load; the app starts locked and the Unlock button is the way in.
+    QVERIFY(Keyring::reads.isEmpty());
+    QVERIFY(find<QPlainTextEdit>(fresh, "plain-box")->toPlainText().isEmpty());
+    QTest::mouseClick(find<QPushButton>(fresh, "debug-btn"), Qt::LeftButton);
+    QVERIFY(find<QPushButton>(fresh, "plain-unlock")->isVisibleTo(&fresh));
+}
+
+void TestMinimal::unlockUsesTheSavedPassword()
+{
+    {
+        Window w;
+        signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
+    }
+    Keyring::silent = false;                 // as on the PWA, where only this
+                                             // button may reach the store
+    Keyring::writes = 0;                     // the write above was the sign-in
+
+    Window w;
+    settle();
+    QTest::mouseClick(find<QPushButton>(w, "debug-btn"), Qt::LeftButton);
+    QTest::mouseClick(find<QPushButton>(w, "plain-unlock"), Qt::LeftButton);
+
+    // Unlocked from the store, and the sign-in form was never shown.
+    QVERIFY(find<QPlainTextEdit>(w, "plain-box")->toPlainText().contains(
+            QStringLiteral("Readable: Cedric")));
+    QCOMPARE(w.findChild<QStackedWidget *>()->currentIndex(), 0);
+    QVERIFY(w.notices.isEmpty());
+
+    // And the password is not written back. It is already in the store, and on
+    // the PWA a write is a second modal: unlocking would close the "Sign In"
+    // form only to open a "Save" one.
+    QCOMPARE(Keyring::writes, 0);
+}
+
+void TestMinimal::aStalePasswordFallsBackToTheForm()
+{
+    {
+        Window w;
+        signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
+    }
+    // A password the blob no longer accepts — changed on another device, or an
+    // entry left over from an older vault.
+    Keyring::store.insert(QStringLiteral("Cedric"), QStringLiteral("stale"));
+
+    Window w;
+    settle();
+    // The silent attempt at startup fails without a word, exactly as a missing
+    // entry would.
+    QVERIFY(find<QPlainTextEdit>(w, "plain-box")->toPlainText().isEmpty());
+    QVERIFY(w.notices.isEmpty());
+
+    // And Unlock asks, rather than failing again in silence.
+    QTest::mouseClick(find<QPushButton>(w, "debug-btn"), Qt::LeftButton);
+    QTest::mouseClick(find<QPushButton>(w, "plain-unlock"), Qt::LeftButton);
+    QCOMPARE(find<QLineEdit>(w, "signin-username")->text(), QStringLiteral("Cedric"));
+
+    // Typing the right one replaces the stale entry.
+    find<QLineEdit>(w, "signin-password")->setText(QStringLiteral("hunter2"));
+    QTest::mouseClick(find<QPushButton>(w, "signin-submit"), Qt::LeftButton);
+    QCOMPARE(Keyring::store.value(QStringLiteral("Cedric")), QStringLiteral("hunter2"));
+}
+
+void TestMinimal::deletingAUserForgetsItsSavedPassword()
+{
+    Window w;
+    signIn(w, QStringLiteral("Cedric"), QStringLiteral("hunter2"));
+    QVERIFY(Keyring::store.contains(QStringLiteral("Cedric")));
+
+    QTest::mouseClick(find<QPushButton>(w, "debug-btn"), Qt::LeftButton);
+    QTest::mouseClick(find<QPushButton>(w, "delete-user"), Qt::LeftButton);
+
+    QCOMPARE(Core::count(vault()), 0);
+    // The blob is gone, so the password that opened it has nothing left to
+    // open; leaving it in the keyring would be a stray secret.
+    QVERIFY(!Keyring::store.contains(QStringLiteral("Cedric")));
+}
+
+// The one thing the fake above cannot check: that the real Cred::read() keeps
+// its promise to call back exactly once whatever the machine has. Every
+// fallback in the app hangs off the miss — Unlock only opens the form because
+// the read came back empty — so a backend that answered by saying nothing
+// would leave the button dead. This reads a key nothing will ever have stored
+// and writes nothing, so it is safe on a developer's machine as well as on a
+// build box with no keyring at all.
+void TestMinimal::aRealReadAlwaysCallsBack()
+{
+    int calls = 0;
+    QString got = QStringLiteral("untouched");
+    Cred::read(QStringLiteral("prototype-minimal-qt test: no such user"),
+               [&](const QString &password) {
+                   ++calls;
+                   got = password;
+               });
+
+    QTRY_COMPARE_WITH_TIMEOUT(calls, 1, 10000);
+    QVERIFY(got.isEmpty());
+
+    // And it stays called once — no second answer from a queued job.
+    QTest::qWait(200);
+    QCOMPARE(calls, 1);
+    qInfo("backend available here: %s", Cred::available() ? "yes" : "no");
 }
 
 int main(int argc, char *argv[])

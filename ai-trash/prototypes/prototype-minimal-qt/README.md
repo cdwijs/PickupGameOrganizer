@@ -7,7 +7,7 @@ three targets from one source tree.
 | target | output | |
 |---|---|---|
 | PWA | `dist/pwa/` | 14 MB, installable, works offline |
-| Linux | `dist/minimal-qt` | 185 kB native x86_64 |
+| Linux | `dist/minimal-qt` | 450 kB native x86_64 |
 | Android | `dist/minimal-qt-debug.apk` | 15 MB, `org.pgo.minimalqt`, arm64-v8a |
 
 `dist/` is committed, so a fresh checkout can serve the PWA and install the APK
@@ -16,9 +16,10 @@ without a toolchain.
 This is the fourth telling of the same app — JavaScript in `prototype-minimal`,
 C compiled to wasm in `prototype-webassembly`, Kotlin in
 `prototype-minimal-apk`, Qt here. The interesting number is how little new code
-the fourth telling needed: **1,420 lines of C++ across `src/`**, none of which
+the fourth telling needed: **1,570 lines of C++ across `src/`**, none of which
 knows what a roster is, what a vault entry looks like, or how AES works, plus a
-280-line test suite.
+500-line test suite. The credential store is 150 lines of that, and none of the
+platform work is in it — see below.
 
 ## Where the app actually lives
 
@@ -30,7 +31,7 @@ C++ calls it directly:
 | | |
 |---|---|
 | **C, unchanged** | every rule and every cryptographic primitive |
-| **C++/Qt** | widgets, storage, clipboard, entropy |
+| **C++/Qt** | widgets, storage, clipboard, entropy, the credential store |
 
 That C is already differential-tested against prototype-minimal's own
 JavaScript (99 comparisons of parse/toggle/rewrite, plus both directions of
@@ -45,7 +46,8 @@ builds byte-identically and all five of its suites still pass.
 
 ## Build status
 
-Built and checked on 2026-08-27:
+Built and checked on 2026-08-27, and again on 2026-09-09 for the credential
+store:
 
 - **PWA** — driven in headless Chromium: created an account (the vault and
   session land in `localStorage` in prototype-minimal's exact blob format,
@@ -53,22 +55,25 @@ Built and checked on 2026-08-27:
   🔍🐛 fold and read `Readable: Cedric` and the `[group1]` P-256 key out of the
   decrypted panel, pasted a roster (2 date blocks, both cards filled) and
   toggled *Going* — 3 players, the rewritten roster 258 → 275 characters.
-- **Linux** — `ctest` drives the real widgets offscreen: 9 test functions
+  Driven again for the credential store: creating the account raised
+  QtKeychain's *Save* form with `Cedric` and the password already in it,
+  reloading showed **no dialog** and the *Unlock* button, and pressing *Unlock*
+  raised the *Sign In* form — with the browser's own *Use a saved password…*
+  button on it — whose password refilled the decrypted panel (560 chars) and
+  left no second modal behind.
+- **Linux** — `ctest` drives the real widgets offscreen: 15 test functions
   covering create, refuse, decline, two users on one password, restart,
-  unlock, vault merge, roster toggle and delete-all.
+  unlock, vault merge, roster toggle, delete-all, and seven for the keyring.
 - **Android** — assembles and is debug-signed (v2), `minSdk 28 / target 34`.
-  Run on Cedric's phone, where it turned up the soft-keyboard bug below;
-  otherwise unverified on hardware by anyone here.
+  `keychain_android.cpp` and `androidkeystore.cpp` are in the packaged
+  `libminimal-qt_arm64-v8a.so`. Run on Cedric's phone before the keyring
+  landed, where it turned up the soft-keyboard bug below; the keystore path
+  itself is unverified on hardware by anyone here.
 
 ## What Qt cannot do that a browser can
 
-Three deviations, all of them forced, none of them in the rules:
+Two deviations, both forced, neither in the rules:
 
-- **No credential store.** `prototype-minimal` asks the browser for a saved
-  password on load and silently re-derives the key. There is no
-  `navigator.credentials` in Qt, so this app always starts locked and the
-  **Unlock** button is the way back in — which is exactly what
-  prototype-minimal does on Firefox and Safari.
 - **Clipboard reads can be refused.** `Clip::read()` is asynchronous on every
   target because in the browser it has to be: `QClipboard::text()` returns only
   what a paste event already gave Qt, so an app-initiated read comes back
@@ -80,6 +85,75 @@ Three deviations, all of them forced, none of them in the rules:
   font with no emoji coverage, so 🔍🐛 comes out as two empty boxes. The button
   asks `QFontMetrics::inFontUcs4()` first and falls back to the label `debug`;
   the 🗓️ and ⚽ inside pasted roster text are still tofu there.
+
+## The credential store
+
+`prototype-minimal` asks the browser for a saved password on load
+(`navigator.credentials.get({ password: true, mediation: 'optional' })`) and
+silently re-derives the key from it, and hands the password back after a
+successful sign-in (`navigator.credentials.store`). This app used to have no
+equivalent and always started locked — that was the third forced deviation
+above, and it is gone. [QtKeychain][qtk] is a submodule under `third_party/`,
+and it has a backend for every one of these three targets:
+
+| target | where the password goes |
+|---|---|
+| Linux | GNOME Keyring, or KWallet over D-Bus |
+| Android | the Android keystore — a hardware-backed RSA key wrapping an AES-GCM key, the ciphertext in `SharedPreferences` |
+| PWA | the browser's own password manager, through `navigator.credentials` and a transient HTML form — the same store prototype-minimal reaches, reached the same way |
+
+[qtk]: https://github.com/frankosterfeld/qtkeychain
+
+**What is stored is the password, not the key.** The key is 310 000 PBKDF2
+iterations away and the blob is the only thing that can prove a password right,
+so the app re-derives on every start exactly as the web page does. The entry is
+keyed by the username the *blob* holds rather than the one that was typed, so
+signing in as `CEDRIC` does not leave a second entry behind.
+
+**It is consulted in two places, and not a third.**
+
+- **At startup, on a restored session.** The session names the user, the keyring
+  hands back the password, one derivation fills the decrypted panel. This is
+  precisely where prototype-minimal calls `tryPrefill()`.
+- **When Unlock is pressed.** The keyring is asked first; only if it has
+  nothing, or hands back a password the blob refuses, does the form open.
+- **Never from the sign-in view.** A keyring is looked up by name, and there is
+  nothing to enumerate — the vault stores every username encrypted inside its
+  own blob. Without a session there is no name to look up, so a first sign-in on
+  a device is always typed.
+
+**The PWA reads only on Unlock.** QtKeychain's WebAssembly backend has to be a
+modal form: `navigator.credentials.store()` needs a user gesture, and browsers
+only offer to save a password when they see a form submitted. Reading on every
+page load would therefore put a dialog in the way where today there is a button
+that can be ignored, so `Cred::silent()` is false there and the startup read is
+skipped. Unlock is the user gesture the browser wants, and the button the store
+hangs off.
+
+That also decides one thing that looks like a detail and is not: a password
+that came *out* of the store is never written back. It is already there, and on
+the PWA the write is a second modal — an unlock would close the *Sign In* form
+only to open a *Save* one. `MainWindow::PasswordSource` is what carries that
+distinction from the sign-in attempt down to `finishSignIn()`.
+
+**Sign out keeps the entry; deleting a user clears it.** Signing out is durable
+without deleting anything, because the startup read needs a session to name the
+user and signing out removes it. Deleting a user removes the password with the
+blob, since a secret with nothing left to open is a stray. Two things this
+cannot do:
+
+- **Delete-all clears only the signed-in user's entry**, for the same reason
+  the sign-in view cannot be prefilled: the other usernames are inside blobs
+  that are about to be erased, so there is no way to name them. A second user's
+  saved password is left behind with nothing to open.
+- **The PWA cannot delete at all** — `DeletePasswordJob` reports
+  `NotImplemented`, because a page cannot reach into the browser's password
+  manager. Clearing it there is a thing the user does in browser settings.
+
+**Nothing is ever written in the clear.** `setInsecureFallback(false)` on every
+job, so a machine with no keyring — a build container, a headless session —
+reports a failure and the app falls back to asking, rather than dropping the
+password into a settings file next to the vault it opens.
 
 ## Typing on Android
 
@@ -100,15 +174,24 @@ covering it.
 appeared; moving focus to the password field made everything typed show up at
 once in the username box. Android's keyboard *composes* text before committing
 it, and the composing string was not being drawn — so the field stayed empty
-until the composition was committed, which is what a focus change does. The
-password field never had the problem, because `QLineEdit` adds
-`ImhNoAutoUppercase | ImhNoPredictiveText | ImhSensitiveData` itself for any
-echo mode that is not `Normal`. The same hints are now set explicitly on the
-username field, the vault box and the paste box — which is also what
-prototype-minimal asks the browser for on its username input
-(`autocapitalize="none" autocorrect="off" spellcheck="false"`), and what
-stopped typed text from being painted on top of the placeholder in the paste
-box.
+until the composition was committed, which is what a focus change does.
+
+The first attempt at this set `ImhNoAutoUppercase | ImhNoPredictiveText` and
+**changed nothing on the phone**, for a reason worth writing down: Qt turns
+`ImhNoPredictiveText` into Android's `TYPE_TEXT_FLAG_NO_SUGGESTIONS` only when
+the environment variable
+`QT_ANDROID_ENABLE_WORKAROUND_TO_DISABLE_PREDICTIVE_TEXT` is set
+(`QtEditText.isDisablePredictiveTextWorkaround`, in `Qt6Android.jar`), and
+nothing sets it. The hint is inert by default.
+
+`Qt::ImhSensitiveData` needs no opt-in: Qt maps it to
+`TYPE_TEXT_VARIATION_VISIBLE_PASSWORD`, an input type keyboards do not compose
+in, so each character is committed as it is typed. That is also why the
+password field was never affected — `QLineEdit` adds `ImhHiddenText` for any
+echo mode that is not `Normal`, which maps to the password input type. It is
+now set on the username field, the vault box and the paste box, alongside the
+hints prototype-minimal asks the browser for on the same input
+(`autocapitalize="none" autocorrect="off" spellcheck="false"`).
 
 None of this does anything on desktop.
 
@@ -146,14 +229,32 @@ prototype-minimal can be open in one browser without fighting over one vault.
 On Linux and Android they are `QSettings` — an INI file under
 `~/.config/pgo/`, `SharedPreferences`-backed on Android.
 
-The key is never stored anywhere. A restart restores the session but not the
-plaintext, which is why the decrypted panel starts locked.
+The key is never stored anywhere, and neither is the password: a restart
+restores the session but not the plaintext. What refills it is a fresh
+derivation from a password the *platform's* keyring hands back — never one of
+these three keys. See [The credential store](#the-credential-store).
 
 ## Building
 
 Needs Qt 6 for three targets, Emscripten and the Android SDK/NDK — all in the
-**`claude-code-agent-qt`** image. Either point the workspace at that image in
-`workspaces.conf` and run `./build.sh`, or from an ordinary session:
+**`claude-code-agent-qt`** image — and the QtKeychain submodule:
+
+```sh
+git submodule update --init \
+    ai-trash/prototypes/prototype-minimal-qt/third_party/qtkeychain
+```
+
+`build.sh` fetches it itself if it is missing, and CMake refuses to configure
+without it. It is pinned to `0deb2c0` rather than to a tag: the WebAssembly
+backend landed after v0.14.0 and is in no release yet, and it is the reason all
+three targets can have a credential store from one dependency. It is built
+static, with its own translations and tests off, and with `LIBSECRET_SUPPORT=OFF`
+— libsecret is not in the Qt image, and without it the Linux backend still
+reaches GNOME Keyring and KWallet over D-Bus, which is what a desktop session
+actually runs.
+
+Either point the workspace at that image in `workspaces.conf` and run
+`./build.sh`, or from an ordinary session:
 
 ```sh
 ./build.sh --docker              # linux + tests + pwa + android → dist/
@@ -193,7 +294,14 @@ adb install -r dist/minimal-qt-debug.apk
 | `unlockRefillsThePlaintext` | wrong password says *Incorrect password* and never offers to create; the right one refills |
 | `pastedVaultIsMerged` | a vault pasted into an empty device adopts, twice is a no-op, and it still opens with its password |
 | `rosterParsesAndTogglesGoing` | toggle adds `Cedric (app)` to the first block and removes it again |
-| `deleteAllEmptiesTheVault` | both users gone, signed out, buttons greyed |
+| `deleteAllEmptiesTheVault` | both users gone, signed out, buttons greyed — and only the signed-in user's saved password went with them |
+| `signingInSavesThePasswordInTheKeyring` | one entry, under the spelling the blob holds and not the one typed |
+| `savedPasswordUnlocksOnRestart` | a restart reads the keyring once and refills the plaintext: no form, no notice, no Unlock button |
+| `aStoreThatIsNotSilentIsLeftForTheUnlockButton` | the PWA's rule — nothing is asked of the store on a page load |
+| `unlockUsesTheSavedPassword` | Unlock unlocks straight from the store, never shows the form, and does not write the password back |
+| `aStalePasswordFallsBackToTheForm` | a password the blob refuses fails silently at startup, makes Unlock ask, and is replaced by the next success |
+| `deletingAUserForgetsItsSavedPassword` | the blob and its password go together |
+| `aRealReadAlwaysCallsBack` | the real `Cred::read()`, not the fake: a miss has to come back as a miss, because every fallback in the app hangs off it |
 
 The rules underneath have their own suite in `prototype-webassembly`; these
 check that this shell reaches them the way the web page does.
@@ -206,9 +314,12 @@ check that this shell reaches them the way the web page does.
 - `src/core.{h,cpp}` — the C core as C++ sees it. `wasm_reset()` before every
   call, results copied into `QString` before the next one, JSON in and out.
 - `src/storage.{h,cpp}` — localStorage in the browser, QSettings elsewhere.
+- `src/credentials.{h,cpp}` — the saved password. Four calls over QtKeychain;
+  `silent()` is the whole of what this app knows about the platforms.
 - `src/clipboard.{h,cpp}` — asynchronous clipboard, real Clipboard API in the
   browser.
 - `src/main.cpp`, `CMakeLists.txt`, `build.sh`, `tests/`, `web/`, `android/`.
+- `third_party/qtkeychain` — submodule, pinned to `0deb2c0`.
 
 ## Notes and limitations
 
@@ -219,6 +330,22 @@ check that this shell reaches them the way the web page does.
 - Sign-in blocks the UI thread for one PBKDF2 derivation per stored blob
   (310 000 iterations each), the same as everywhere else this app exists. The
   form disables itself and reads *Working…* while it runs.
+- **The C core is compiled `-O2` even in a Debug build** (`CMakeLists.txt`).
+  The APK has to be a Debug build to stay debuggable — Qt passes `--release`
+  to `androiddeployqt` for every other configuration — and `-O0` through
+  310 000 PBKDF2 iterations turned sign-in on a phone into a half-minute wait.
+  Only the crypto is optimised; the C++ a debugger is pointed at is not.
 - `dist/` is committed at Cedric's request, binaries included. Rebuilding
   changes ~30 MB of it, so `./build.sh` before a commit is a deliberate act.
 - The APK is arm64-v8a and debug-signed: `adb install` yes, store no.
+- The Linux binary went from 185 kB to 450 kB, which is QtKeychain linked
+  static plus Qt6::DBus. The PWA and the APK did not change size in any way
+  worth reporting: 14 MB and 15 MB are Qt.
+- `QKeychain::isAvailable()` is called once per launch, and on a desktop
+  session it is two blocking D-Bus round trips (KWallet 6, then KWallet 5) on
+  the UI thread. In a container with no session bus it short-circuits. It has
+  not been a visible pause anywhere it has run, but it is a synchronous call in
+  a startup path and worth knowing about.
+- The keystore path on Android is the one part of this that no one has run on
+  hardware. Everything about it is in QtKeychain rather than here, but "it
+  compiles into the APK" is all that has been shown.
