@@ -39,17 +39,27 @@ struct Group
     Signature sigGroup;
 };
 
+struct PlayingUser
+{
+    QString nickName;
+    uint32_t  version;
+    Signature sigUser;
+};
+
+
+
 struct Game
 {
-    PublicKey keyIsPlaying[GROUP_MAX_USERS];
+    PlayingUser userIsPlaying[GROUP_MAX_USERS];
     uint32_t  version;
-    Signature sigGame;
+    Signature sigGame; //signature of everybody who is allowed to forward the game, so everybody in the group.
 };
 
 struct User
 {
     PublicKey publicKey;
     PrivateKey privatekey;
+    QString name;
 };
 
 class GroupAdministration : public QWidget
@@ -66,6 +76,7 @@ private:
     QGridLayout *myGridLayout;
     QPushButton *myCreateGroupBtn;
     QPushButton *myCreateUserBtn;
+    void updatePlayingStatus(PrivateKey privatekey, PublicKey publickey, bool playing);
 };
 
 /*
