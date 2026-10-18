@@ -1,0 +1,3 @@
+# Qt Creator build trees and per-user project settings
+build/
+.qtcreator/

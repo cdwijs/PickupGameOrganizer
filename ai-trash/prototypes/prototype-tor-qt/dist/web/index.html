@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- 1 CSS px = 1 Qt device-independent px, no zoom; fill the notch area too. -->
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, user-scalable=0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Tor node">
+  <meta name="theme-color" content="#7d4698">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>Tor node prototype</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #fff; }
+    #screen { width: 100%; height: 100%; }
+    #status { font: 15px/1.5 system-ui, sans-serif; color: #444; padding: 2em 16px; text-align: center; }
+  </style>
+  <!-- Threads need SharedArrayBuffer, i.e. a cross-origin isolated page. When the
+       host does not send COOP/COEP, this service worker adds them and reloads once. -->
+  <script src="coi-serviceworker.js"></script>
+</head>
+<body>
+  <div id="status">Loading…</div>
+  <div id="screen"></div>
+
+  <script>
+    'use strict';
+    // tor's DataDirectory lives here (see dataDirectory() in mainwindow.cpp).
+    const PERSIST_DIR = '/persist';
+    const SYNC_INTERVAL_MS = 30000;
+
+    const statusBox = document.querySelector('#status');
+    const screen = document.querySelector('#screen');
+    const setStatus = text => { statusBox.textContent = text; };
+
+    // ?TOR_QT_AUTOSTART=snowflake&TOR_QT_PROFILE=a ... become environment variables.
+    function environmentFromQuery() {
+      const env = {};
+      for (const [name, value] of new URLSearchParams(location.search)) {
+        if (/^TOR_QT_[A-Z_]+$/.test(name) || name === 'SNOWFLAKE_TRACE')
+          env[name] = value;
+      }
+      return env;
+    }
+
+    // Mount IndexedDB before main() runs, so tor finds its cached consensus.
+    function mountPersistentStorage(instance) {
+      const FS = instance.FS;
+      const IDBFS = FS.filesystems.IDBFS;
+      try { FS.mkdir(PERSIST_DIR); } catch (e) { /* exists */ }
+      FS.mount(IDBFS, {}, PERSIST_DIR);
+      instance.addRunDependency('persist');
+      FS.syncfs(true, err => {
+        if (err)
+          console.warn('IndexedDB load failed, starting with empty storage:', err);
+        instance.removeRunDependency('persist');
+      });
+
+      let syncing = false;
+      const save = () => {
+        if (syncing)
+          return;
+        syncing = true;
+        FS.syncfs(false, err => {
+          syncing = false;
+          if (err)
+            console.warn('IndexedDB save failed:', err);
+        });
+      };
+      setInterval(save, SYNC_INTERVAL_MS);
+      // iOS suspends hidden tabs within seconds; save while we still can.
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden')
+          save();
+      });
+      window.addEventListener('pagehide', save);
+    }
+
+    async function init() {
+      if (!window.crossOriginIsolated) {
+        setStatus('This page needs cross-origin isolation (COOP/COEP) for threads. ' +
+                  'Waiting for the service worker…');
+        return; // coi-serviceworker.js reloads the page once it is in control
+      }
+      try {
+        await qtLoad({
+          preRun: [mountPersistentStorage],
+          qt: {
+            onLoaded: () => {
+              statusBox.style.display = 'none';
+              screen.style.display = 'block';
+            },
+            onExit: exit => {
+              screen.style.display = 'none';
+              statusBox.style.display = 'block';
+              setStatus('Application exited' + (exit.text ? ': ' + exit.text : '') +
+                        (exit.code !== undefined ? ` (code ${exit.code})` : ''));
+            },
+            entryFunction: window.prototype_tor_qt_entry,
+            containerElements: [screen],
+            environment: environmentFromQuery(),
+          },
+        });
+      } catch (e) {
+        console.error(e);
+        setStatus('Failed to start: ' + e);
+      }
+    }
+    window.addEventListener('load', init);
+  </script>
+  <script src="prototype-tor-qt.js"></script>
+  <script src="qtloader.js"></script>
+</body>
+</html>

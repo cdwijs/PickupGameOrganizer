@@ -1,0 +1,241 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 1250" width="1500" height="1250" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>prototype-tor-qt — modules and data streams</title>
+  <style>
+    .box   { fill: #ffffff; stroke: #334155; stroke-width: 1.5; }
+    .ext   { fill: #f8fafc; stroke: #64748b; stroke-width: 1.5; }
+    .pill  { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1; }
+    .chip  { fill: #eef2ff; stroke: #c7d2fe; stroke-width: 1; }
+    .layer { fill: #f5f3ff; stroke: #c4b5fd; stroke-width: 1; }
+    .web   { stroke-dasharray: 6 4; }
+    .h     { font-size: 15px; font-weight: 700; fill: #0f172a; }
+    .t     { font-size: 12px; fill: #334155; }
+    .s     { font-size: 11px; fill: #475569; }
+    .g     { font-size: 13px; font-weight: 600; fill: #64748b; letter-spacing: .04em; }
+    .lab   { font-size: 11px; }
+    .ctl   { stroke: #2563eb; fill: none; stroke-width: 2; }
+    .chat  { stroke: #16a34a; fill: none; stroke-width: 2.5; }
+    .cell  { stroke: #ea580c; fill: none; stroke-width: 3; }
+    .sf    { stroke: #7c3aed; fill: none; stroke-width: 3; }
+    .sig   { stroke: #6b7280; fill: none; stroke-width: 1.8; stroke-dasharray: 5 4; }
+    .lctl  { fill: #1d4ed8; } .lchat { fill: #15803d; } .lcell { fill: #c2410c; }
+    .lsf   { fill: #6d28d9; } .lsig  { fill: #4b5563; }
+  </style>
+  <defs>
+    <marker id="aCtl"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>
+    <marker id="aChat" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#16a34a"/></marker>
+    <marker id="aCell" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ea580c"/></marker>
+    <marker id="aSf"   viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>
+    <marker id="aSig"  viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6b7280"/></marker>
+  </defs>
+
+  <rect width="1500" height="1250" fill="#ffffff"/>
+  <text x="30" y="45" font-size="22" font-weight="700" fill="#0f172a">prototype-tor-qt — modules and data streams</text>
+  <text x="30" y="66" class="t">One process (Linux · Android · browser/WASM) embeds tor, a C++ Snowflake client and the chat. Arrows show who sends what to whom.</text>
+
+  <!-- ===================== regions ===================== -->
+  <rect x="30" y="80" width="900" height="1020" rx="14" fill="#fbfdff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="48" y="100" class="g">APP PROCESS</text>
+  <rect x="950" y="80" width="520" height="1020" rx="14" fill="#fcfcfd" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="8 5"/>
+  <text x="968" y="100" class="g">NETWORK</text>
+
+  <!-- ===================== row 1: GUI ===================== -->
+  <rect x="60" y="110" width="840" height="100" rx="10" class="box"/>
+  <text x="76" y="134" class="h">MainWindow  <tspan class="s" font-weight="400">(Qt Widgets GUI · src/mainwindow.*)</tspan></text>
+  <rect x="76"  y="150" width="150" height="44" rx="6" class="chip"/><text x="151" y="169" class="s" text-anchor="middle">Mode ▾ Direct/Snowflake</text><text x="151" y="185" class="s" text-anchor="middle">+ Start Tor</text>
+  <rect x="236" y="150" width="130" height="44" rx="6" class="chip"/><text x="301" y="169" class="s" text-anchor="middle">Generate onion</text><text x="301" y="185" class="s" text-anchor="middle">shows our .onion</text>
+  <rect x="376" y="150" width="150" height="44" rx="6" class="chip"/><text x="451" y="169" class="s" text-anchor="middle">Peer address</text><text x="451" y="185" class="s" text-anchor="middle">+ Send box</text>
+  <rect x="536" y="150" width="130" height="44" rx="6" class="chip"/><text x="601" y="169" class="s" text-anchor="middle">Received</text><text x="601" y="185" class="s" text-anchor="middle">messages</text>
+  <rect x="676" y="150" width="210" height="44" rx="6" class="chip"/><text x="781" y="169" class="s" text-anchor="middle">Status / debug pane</text><text x="781" y="185" class="s" text-anchor="middle">← log(line) from every module</text>
+
+  <!-- ===================== row 2 ===================== -->
+  <rect x="60" y="300" width="300" height="100" rx="10" class="box"/>
+  <text x="76" y="324" class="h">TorController</text>
+  <text x="76" y="344" class="t">writes torrc (+ guards or bridges),</text>
+  <text x="76" y="360" class="t">starts tor_run_main() on a QThread,</text>
+  <text x="76" y="376" class="t">drives tor over the control socket.</text>
+  <text x="76" y="392" class="s">src/torcontroller.*</text>
+
+  <rect x="600" y="300" width="300" height="100" rx="10" class="box"/>
+  <text x="616" y="324" class="h">ChatLink</text>
+  <text x="616" y="344" class="t">listen() on 127.0.0.1:&lt;local&gt; (onion target),</text>
+  <text x="616" y="360" class="t">dials peers via tor's SOCKS port.</text>
+  <text x="616" y="376" class="t">Frame: u32 LE length + UTF-8 text</text>
+  <text x="616" y="392" class="s">src/chatlink.*</text>
+
+  <!-- ===================== row 3: tor ===================== -->
+  <rect x="60" y="500" width="840" height="140" rx="10" fill="#fff7ed" stroke="#c2410c" stroke-width="1.8"/>
+  <rect x="80"  y="515" width="260" height="30" rx="15" class="pill"/><text x="210" y="535" class="s" text-anchor="middle">owning control socket (socketpair)</text>
+  <rect x="80"  y="598" width="260" height="30" rx="15" class="pill"/><text x="210" y="618" class="s" text-anchor="middle">ClientTransportPlugin snowflake socks5</text>
+  <rect x="600" y="515" width="140" height="30" rx="15" class="pill"/><text x="670" y="535" class="s" text-anchor="middle">SocksPort auto</text>
+  <rect x="760" y="515" width="130" height="30" rx="15" class="pill"/><text x="825" y="535" class="s" text-anchor="middle">onion service :9999</text>
+  <text x="545" y="568" class="h" text-anchor="middle">libtor.a — tor 0.4.9.14 (client only)</text>
+  <text x="545" y="588" class="t" text-anchor="middle">tor_run_main() on its own QThread · tor_api.h</text>
+  <text x="545" y="606" class="s" text-anchor="middle">ephemeral v3 onion (ADD_ONION NEW:ED25519-V3)</text>
+  <text x="545" y="622" class="s" text-anchor="middle">DataDirectory per profile (browser: IndexedDB /persist)</text>
+
+  <!-- ===================== row 4: Snowflake ===================== -->
+  <rect x="45" y="690" width="870" height="325" rx="12" fill="#faf8ff" stroke="#ddd6fe" stroke-width="1.2"/>
+  <text x="902" y="708" class="g" text-anchor="end" style="fill:#7c3aed">SNOWFLAKE PLUGGABLE TRANSPORT (C++) · src/snowflake/</text>
+
+  <rect x="60" y="720" width="220" height="110" rx="10" class="box"/>
+  <text x="76" y="744" class="h">snowflake::Client</text>
+  <text x="76" y="764" class="t">SOCKS5 listener on</text>
+  <text x="76" y="780" class="t">127.0.0.1:&lt;random&gt;; parses</text>
+  <text x="76" y="796" class="t">bridge args from user/pass</text>
+  <text x="76" y="818" class="s">client.*</text>
+
+  <rect x="320" y="720" width="300" height="170" rx="10" class="box"/>
+  <text x="336" y="744" class="h">snowflake::Session</text>
+  <text x="604" y="744" class="s" text-anchor="end">session.*</text>
+  <rect x="334" y="754" width="272" height="30" rx="5" class="layer"/><text x="344" y="773" class="s"><tspan font-weight="700">smux v2</tspan> · stream 3, window UPD, keepalive</text>
+  <rect x="334" y="789" width="272" height="30" rx="5" class="layer"/><text x="344" y="808" class="s"><tspan font-weight="700">KCP</tspan> · stream mode, nodelay, wnd 65535</text>
+  <rect x="334" y="824" width="272" height="30" rx="5" class="layer"/><text x="344" y="843" class="s"><tspan font-weight="700">encapsulation</tspan> · length prefix + padding</text>
+  <text x="336" y="874" class="s">new proxy → resend token + client ID (re-attach)</text>
+
+  <rect x="660" y="720" width="240" height="70" rx="10" class="box"/>
+  <text x="676" y="743" class="h">WebRtcPeer</text>
+  <text x="676" y="762" class="t">libdatachannel / datachannel-wasm</text>
+  <text x="676" y="779" class="s">1 ordered data channel · webrtcpeer.*</text>
+
+  <rect x="660" y="810" width="240" height="70" rx="10" class="box web"/>
+  <text x="676" y="833" class="h">WebSocketPeer</text>
+  <text x="676" y="852" class="t">browser-only fallback</text>
+  <text x="676" y="869" class="s">after 2 failed proxies · websocketpeer.*</text>
+
+  <rect x="320" y="930" width="300" height="70" rx="10" class="box"/>
+  <text x="336" y="953" class="h">snowflake::Broker</text>
+  <text x="336" y="972" class="t">POST /client "1.0\n{offer, nat, fingerprint}"</text>
+  <text x="336" y="989" class="s">QNetworkAccessManager · broker.*</text>
+
+  <!-- ===================== loopback band ===================== -->
+  <rect x="45" y="1030" width="870" height="55" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" stroke-dasharray="4 3"/>
+  <text x="60" y="1052" class="t"><tspan font-weight="700">Loopback layer</tspan> (src/loopback.h) — every app ↔ tor link above (control, SOCKS, onion target, PT port) is a local socket:</text>
+  <text x="60" y="1072" class="s">native: QLocalSocket / QTcpSocket / QTcpServer  ·  browser: ShimSocket / ShimServer on netshim in-memory pipes (non-127/8 → ENETUNREACH)</text>
+
+  <!-- ===================== network side ===================== -->
+  <rect x="1240" y="110" width="220" height="100" rx="10" class="ext"/>
+  <text x="1256" y="134" class="h">Peer app</text>
+  <text x="1256" y="154" class="t">prototype-tor-qt or</text>
+  <text x="1256" y="170" class="t">prototype-arti</text>
+  <text x="1256" y="194" class="s">&lt;peer&gt;.onion:9999</text>
+
+  <rect x="1240" y="300" width="220" height="170" rx="40" fill="#fff7ed" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="1350" y="350" class="h" text-anchor="middle">Tor network</text>
+  <text x="1350" y="374" class="t" text-anchor="middle">relays</text>
+  <text x="1350" y="392" class="t" text-anchor="middle">HSDirs (descriptors)</text>
+  <text x="1350" y="410" class="t" text-anchor="middle">intro &amp; rendezvous</text>
+  <text x="1350" y="428" class="t" text-anchor="middle">points</text>
+
+  <rect x="1000" y="525" width="200" height="70" rx="10" class="ext"/>
+  <text x="1016" y="548" class="h">10 pinned guards</text>
+  <text x="1016" y="567" class="s">EntryNodes (guard-nodes.json)</text>
+  <text x="1016" y="584" class="s">direct mode · native builds only</text>
+
+  <rect x="1000" y="720" width="200" height="70" rx="10" class="ext"/>
+  <text x="1016" y="743" class="h">Snowflake proxy</text>
+  <text x="1016" y="762" class="t">volunteer, WebRTC</text>
+  <text x="1016" y="779" class="s">retried every 10 s on timeout</text>
+
+  <rect x="1260" y="715" width="190" height="80" rx="10" class="ext"/>
+  <text x="1276" y="738" class="h">Snowflake bridge</text>
+  <text x="1276" y="757" class="t">Tor Browser defaults</text>
+  <text x="1276" y="774" class="s">first tor hop in</text>
+  <text x="1276" y="788" class="s">Snowflake mode</text>
+
+  <rect x="1000" y="930" width="200" height="70" rx="10" class="ext"/>
+  <text x="1016" y="953" class="h">Snowflake broker</text>
+  <text x="1016" y="972" class="t">matches client ↔ proxy</text>
+  <text x="1016" y="989" class="s">via CDN77 (*.rsc.cdn77.org)</text>
+
+  <!-- ===================== data streams ===================== -->
+  <!-- control: GUI <-> TorController -->
+  <path d="M110 210 V298" class="ctl" marker-end="url(#aCtl)"/>
+  <text x="118" y="245" class="lab lctl">start(mode, guards, PT port)</text>
+  <text x="118" y="260" class="lab lctl">createOnion(9999, local)</text>
+  <path d="M340 300 V212" class="ctl" marker-end="url(#aCtl)"/>
+  <text x="348" y="245" class="lab lctl">controlReady · bootstrapProgress</text>
+  <text x="348" y="260" class="lab lctl">onionCreated · onionPublished</text>
+
+  <!-- control: TorController -> ChatLink -->
+  <path d="M360 350 H598" class="ctl" stroke-dasharray="3 3" marker-end="url(#aCtl)"/>
+  <text x="479" y="342" class="lab lctl" text-anchor="middle">socksReady(port) → setSocksPort</text>
+
+  <!-- control: TorController <-> tor control port -->
+  <path d="M110 400 V513" class="ctl" marker-end="url(#aCtl)"/>
+  <text x="118" y="445" class="lab lctl">commands: SETEVENTS,</text>
+  <text x="118" y="460" class="lab lctl">ADD_ONION, GETINFO</text>
+  <path d="M300 515 V402" class="ctl" marker-end="url(#aCtl)"/>
+  <text x="308" y="445" class="lab lctl">650 events: BOOTSTRAP,</text>
+  <text x="308" y="460" class="lab lctl">HS_DESC UPLOADED, log</text>
+  <text x="308" y="475" class="lab lctl">(closing it stops tor)</text>
+
+  <!-- chat: GUI <-> ChatLink -->
+  <path d="M640 210 V298" class="chat" marker-end="url(#aChat)"/>
+  <text x="648" y="252" class="lab lchat">send(peer, text)</text>
+  <path d="M780 300 V212" class="chat" marker-end="url(#aChat)"/>
+  <text x="788" y="252" class="lab lchat">received(from, text)</text>
+
+  <!-- chat: ChatLink <-> tor -->
+  <path d="M640 400 V513" class="chat" marker-end="url(#aChat)"/>
+  <text x="632" y="445" class="lab lchat" text-anchor="end">outgoing: SOCKS5 CONNECT</text>
+  <text x="632" y="460" class="lab lchat" text-anchor="end">&lt;peer&gt;.onion:9999 + frames</text>
+  <path d="M860 515 V402" class="chat" marker-end="url(#aChat)"/>
+  <text x="852" y="445" class="lab lchat" text-anchor="end">incoming stream →</text>
+  <text x="852" y="460" class="lab lchat" text-anchor="end">127.0.0.1:local</text>
+
+  <!-- tor cells: direct mode -->
+  <path d="M900 560 H998" class="cell" marker-end="url(#aCell)" marker-start="url(#aCell)"/>
+  <text x="948" y="552" class="lab lcell" text-anchor="middle">TLS/TCP</text>
+  <path d="M1100 525 V400 H1238" class="cell" marker-end="url(#aCell)"/>
+  <text x="1108" y="392" class="lab lcell">tor cells</text>
+
+  <!-- tor cells: tor -> Snowflake PT -->
+  <path d="M170 628 V718" class="cell" marker-end="url(#aCell)" marker-start="url(#aCell)"/>
+  <text x="180" y="660" class="lab lcell">SOCKS5 (bridge args in user/pass),</text>
+  <text x="180" y="675" class="lab lcell">then tor's TLS stream to the bridge</text>
+  <path d="M280 775 H318" class="cell" marker-end="url(#aCell)" marker-start="url(#aCell)"/>
+  <text x="299" y="767" class="lab lcell" text-anchor="middle">1:1</text>
+
+  <!-- snowflake packets -->
+  <path d="M620 755 H658" class="sf" marker-end="url(#aSf)" marker-start="url(#aSf)"/>
+  <path d="M620 845 H658" class="sf" marker-end="url(#aSf)" marker-start="url(#aSf)"/>
+  <path d="M900 755 H998" class="sf" marker-end="url(#aSf)" marker-start="url(#aSf)"/>
+  <text x="949" y="747" class="lab lsf" text-anchor="middle">data channel</text>
+  <text x="949" y="772" class="lab lsf" text-anchor="middle">DTLS/SCTP</text>
+  <path d="M1200 755 H1258" class="sf" marker-end="url(#aSf)" marker-start="url(#aSf)"/>
+  <text x="1229" y="747" class="lab lsf" text-anchor="middle">WS</text>
+  <path d="M900 845 H1355 V797" class="sf" stroke-dasharray="7 4" marker-end="url(#aSf)" marker-start="url(#aSf)"/>
+  <text x="1220" y="838" class="lab lsf" text-anchor="middle">wss://snowflake.torproject.net/</text>
+
+  <!-- bridge -> tor network -->
+  <path d="M1355 715 V472" class="cell" marker-end="url(#aCell)" marker-start="url(#aCell)"/>
+  <text x="1363" y="600" class="lab lcell">tor cells</text>
+
+  <!-- chat end to end -->
+  <path d="M1350 298 V212" class="chat" marker-end="url(#aChat)" marker-start="url(#aChat)"/>
+  <text x="1342" y="252" class="lab lchat" text-anchor="end">rendezvous circuit</text>
+  <text x="1342" y="267" class="lab lchat" text-anchor="end">(chat frames, end-to-end)</text>
+
+  <!-- signalling -->
+  <path d="M470 890 V928" class="sig" marker-end="url(#aSig)" marker-start="url(#aSig)"/>
+  <text x="478" y="914" class="lab lsig">negotiate(offer SDP) → answer SDP</text>
+  <path d="M620 965 H998" class="sig" marker-end="url(#aSig)" marker-start="url(#aSig)"/>
+  <text x="810" y="957" class="lab lsig" text-anchor="middle">HTTPS, domain-fronted: SNI www.cdn77.com</text>
+  <text x="810" y="983" class="lab lsig" text-anchor="middle">browser: plain fetch(), no fronting</text>
+  <path d="M1100 930 V792" class="sig" marker-end="url(#aSig)" marker-start="url(#aSig)"/>
+  <text x="1108" y="895" class="lab lsig">relays offer / answer</text>
+  <text x="1108" y="910" class="lab lsig">to a volunteer proxy</text>
+
+  <!-- ===================== legend ===================== -->
+  <rect x="30" y="1120" width="1440" height="110" rx="12" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="48" y="1145" class="g">LEGEND</text>
+  <path d="M50 1170 H100" class="ctl" marker-end="url(#aCtl)"/><text x="110" y="1174" class="t">control: Qt signals/slots, tor control protocol</text>
+  <path d="M50 1200 H100" class="chat" marker-end="url(#aChat)"/><text x="110" y="1204" class="t">chat payload (u32 LE length + UTF-8)</text>
+  <path d="M450 1170 H500" class="cell" marker-end="url(#aCell)"/><text x="510" y="1174" class="t">tor cells / tor TLS stream</text>
+  <path d="M450 1200 H500" class="sf" marker-end="url(#aSf)"/><text x="510" y="1204" class="t">Snowflake packets (smux → KCP → encapsulation)</text>
+  <path d="M840 1170 H890" class="sig" marker-end="url(#aSig)"/><text x="900" y="1174" class="t">rendezvous signalling (SDP offer / answer)</text>
+  <rect x="840" y="1190" width="50" height="20" rx="4" class="box web"/><text x="900" y="1204" class="t">browser-only module / link</text>
+  <text x="1200" y="1174" class="s">Chat frames ride inside tor cells;</text>
+  <text x="1200" y="1190" class="s">direct mode: tor → guards,</text>
+  <text x="1200" y="1206" class="s">Snowflake mode: tor → PT → proxy/bridge.</text>
+</svg>
