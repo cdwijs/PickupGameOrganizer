@@ -13,6 +13,8 @@
 #define GROUP_MAX_MEMBERS 5 //until i know howto efficiently use arrays with a non-fixed size.
 #define MAX_MEMBERS 5
 
+
+
 struct Signature
 {
     uint32_t signature;
@@ -34,12 +36,24 @@ struct Member
     PublicKey publicKey;
 };
 
+struct MemberRights
+{
+    bool canAddUsers; //updates the group activity time
+    bool canRemoveUsers; //updates the group activity time
+    bool canScheduleGame; //updates the group activity time
+    bool canJoinGame; //this can be used to ban people how have not payed, while keeping him in the group
+};
+
+struct GroupMember
+{
+    Member member;
+    MemberRights rights;
+};
+
 struct Group
 {
-    Member memberCanAddUsers[GROUP_MAX_MEMBERS];
-    Member memberCanRemoveUsers[GROUP_MAX_MEMBERS];
-    Member memberCanScheduleGame[GROUP_MAX_MEMBERS];
-    Member memberCanJoinGame[GROUP_MAX_MEMBERS];
+    QList<GroupMember> members;
+    QDateTime expireDateTime;
     uint32_t  version;
     Signature sigGroup;
 };
@@ -82,15 +96,15 @@ public:
 public slots:
     void slotCreateGroup(bool clicked);
     void slotCreateUser(bool clicked);
+    void slotJoinGroup(bool clicked);
 signals:
 private:
     QWidget *myWindow;
     QGridLayout *myGridLayout;
     QPushButton *myCreateGroupBtn;
     QPushButton *myCreateUserBtn;
+    QPushButton *myJoinGroupBtn;
 
-    Group* myGroup; //each group is it's own thing, each encrypted with it's own key, so can't be an array of structs.
-    Member* myMembers[MAX_MEMBERS];
     MemberPrivate* myMembersPrivate[MAX_MEMBERS];
     void updatePlayingStatus(PrivateKey privatekey, PublicKey publickey, bool playing);
 };

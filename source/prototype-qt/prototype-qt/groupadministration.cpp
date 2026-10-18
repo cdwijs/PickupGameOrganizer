@@ -31,6 +31,8 @@ bool hasStrongBoxFeature()
 }
 */
 
+QList<Group> myGroups;
+
 
 GroupAdministration::GroupAdministration(QWidget *parent) : QWidget(parent)
 {
@@ -44,29 +46,20 @@ GroupAdministration::GroupAdministration(QWidget *parent) : QWidget(parent)
     myCreateUserBtn = new QPushButton();
     myCreateUserBtn->setText("create user");
 
+    myJoinGroupBtn = new QPushButton();
+    myJoinGroupBtn->setText("join group");
+
     myGridLayout->addWidget(myCreateGroupBtn);
     myGridLayout->addWidget(myCreateUserBtn);
+    myGridLayout->addWidget(myJoinGroupBtn);
     QSize qsize;
     qsize.setHeight(600);
     qsize.setWidth(800);
 
     connect(myCreateGroupBtn,&QPushButton::clicked,this,&GroupAdministration::slotCreateGroup);
     connect(myCreateUserBtn,&QPushButton::clicked,this,&GroupAdministration::slotCreateUser);
+    connect(myJoinGroupBtn,&QPushButton::clicked,this,&GroupAdministration::slotJoinGroup);
 
-
-    myGroup = new Group;
-    for (int member = 0; member < MAX_MEMBERS; ++member)
-    {
-        myGroup->memberCanAddUsers[member].publicKey.key = 0; //0 is a special value meaning there is no key.  This is a mixing of data and metadata.
-        myGroup->memberCanRemoveUsers[member].publicKey.key = 0;
-        myGroup->memberCanScheduleGame[member].publicKey.key = 0;
-        myGroup->memberCanJoinGame[member].publicKey.key = 0;
-    }
-
-    for (int i = 0; i < MAX_MEMBERS; ++i)
-    {
-        myMembers[i] = nullptr;
-    }
     myMembersPrivate[0] = new MemberPrivate;
     myMembersPrivate[0]->privateKey.key = 0xcafe0124;
     myMembersPrivate[0]->publicKey.key = 0xbeef0124;
@@ -82,17 +75,48 @@ GroupAdministration::GroupAdministration(QWidget *parent) : QWidget(parent)
 
 void GroupAdministration::slotCreateGroup(bool clicked)
 {
+
     qDebug()<<Q_FUNC_INFO;
     Q_UNUSED(clicked);
     //hasStrongBoxFeature(); //android only
 
-    //first create yourself with a userId of 0
-    //
 
+    Group group;
+    group.version = 0;
+    group.members.clear();
+
+    qsizetype membersize = group.members.size();
+    uint32_t highestusedid = 0; //memberid=0 denotes not a user.
+    for (qsizetype member = 0; member < membersize; ++member)
+    {
+        uint32_t id = group.members.at(member).member.userId;
+        if (id > highestusedid)
+        {
+            highestusedid = id; //find the highest user ID, to ensure we don't re-use userID's of people who have left the group.
+        }
+    }
+
+
+
+    GroupMember member;
+    member.member.publicKey = myMembersPrivate[0]->publicKey;
+    member.member.userId = highestusedid + 1; //memberid=0 denotes not a user.
+    member.rights.canAddUsers = true; //when creating the group, the user creating the group gets all the rights.
+    member.rights.canRemoveUsers = true;
+    member.rights.canJoinGame = true;
+    member.rights.canScheduleGame = true;
+    group.members.append(member);
+    QDateTime now = QDateTime::currentDateTime();
+    group.expireDateTime = now.addYears(1); //nope, this can mean expiredatetime lands in the past if the local time is off far enough.
+    group.version += 1;
+    group.sigGroup.signature = 1122334455; //replace by a call to a real signature maker, using the private key of userId 1
+
+    myGroups.append(group); //this is not good, this implies all groups have no encryption or all the same encryption key.
 }
 
 void GroupAdministration::slotCreateUser(bool clicked) //should be called addMember()
 {
+    /*
     PublicKey publickey;
     publickey.key = myMembersPrivate[0]->publicKey.key; //this has to be offered by the user who wants to join the group
 
@@ -150,7 +174,13 @@ void GroupAdministration::slotCreateUser(bool clicked) //should be called addMem
     qDebug() << "String size:" << myString.size(); // This will print 5.
 
     //return newuserid back to the user
+*/
+}
 
+void GroupAdministration::slotJoinGroup(bool clicked) //should be called addMember()
+{
+    qDebug()<<Q_FUNC_INFO;
+    Q_UNUSED(clicked);
 }
 
 void GroupAdministration::updatePlayingStatus(PrivateKey privatekey, PublicKey publickey, bool playing) //also needs to have a pointer to struct Game
