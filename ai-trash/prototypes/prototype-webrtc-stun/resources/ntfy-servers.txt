@@ -1,0 +1,12 @@
+# Public ntfy servers used for signaling, in the order calls try them.
+# Every node listens on all of them. All were reachable and sent
+# Access-Control-Allow-Origin: * (needed in the browser) on 2026-10-18.
+# Source: https://docs.ntfy.sh/integrations/ (Alternative ntfy servers).
+ntfy.sh
+ntfy.adminforge.de
+ntfy.envs.net
+ntfy.tedomum.fr
+ntfy.mzte.de
+ntfy.hostux.net
+notify.utilibre.org
+ntfy.fossman.de

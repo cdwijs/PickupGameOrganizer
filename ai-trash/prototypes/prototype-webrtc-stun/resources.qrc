@@ -1,0 +1,6 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/">
+    <file>resources/ntfy-servers.txt</file>
+    <file>resources/stun-servers.txt</file>
+</qresource>
+</RCC>

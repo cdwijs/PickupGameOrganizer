@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- 1 CSS px = 1 Qt device-independent px, no zoom; fill the notch area too. -->
+  <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, user-scalable=0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1f6f8b">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>WebRTC STUN prototype</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #fff; }
+    #screen { width: 100%; height: 100%; }
+    #status { font: 15px/1.5 system-ui, sans-serif; color: #444; padding: 2em 16px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div id="status">Loading…</div>
+  <div id="screen"></div>
+
+  <script>
+    'use strict';
+    const statusBox = document.querySelector('#status');
+    const screen = document.querySelector('#screen');
+    const setStatus = text => { statusBox.textContent = text; };
+
+    // ?WEBRTC_STUN_NAME=...&WEBRTC_STUN_CONNECT=... become environment variables.
+    function environmentFromQuery() {
+      const env = {};
+      for (const [name, value] of new URLSearchParams(location.search)) {
+        if (/^WEBRTC_STUN_[A-Z_]+$/.test(name))
+          env[name] = value;
+      }
+      return env;
+    }
+
+    async function init() {
+      try {
+        await qtLoad({
+          qt: {
+            onLoaded: () => {
+              statusBox.style.display = 'none';
+              screen.style.display = 'block';
+            },
+            onExit: exit => {
+              screen.style.display = 'none';
+              statusBox.style.display = 'block';
+              setStatus('Application exited' + (exit.text ? ': ' + exit.text : '') +
+                        (exit.code !== undefined ? ` (code ${exit.code})` : ''));
+            },
+            entryFunction: window.prototype_webrtc_stun_entry,
+            containerElements: [screen],
+            environment: environmentFromQuery(),
+          },
+        });
+      } catch (e) {
+        console.error(e);
+        setStatus('Failed to start: ' + e);
+      }
+    }
+    window.addEventListener('load', init);
+  </script>
+  <script src="prototype-webrtc-stun.js"></script>
+  <script src="qtloader.js"></script>
+</body>
+</html>
