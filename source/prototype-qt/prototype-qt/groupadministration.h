@@ -38,11 +38,40 @@ struct Member
 
 struct MemberRights
 {
-    bool canAddUsers; //updates the group activity time
-    bool canRemoveUsers; //updates the group activity time
-    bool canScheduleGame; //updates the group activity time
-    bool canJoinGame; //this can be used to ban people how have not payed, while keeping him in the group
+    bool canAddUsers :1; //updates the group activity time
+    bool canRemoveUsers:1; //updates the group activity time
+    bool canScheduleGame:1; //updates the group activity time
+    bool canJoinGame:1; //this can be used to ban people how have not payed, while keeping him in the group
 };
+
+/*
+What I'd do instead: reverse it. Store the uint8_t and define the bits yourself. That's well-defined everywhere, the same size, and needs no union.
+  The Qt way to do this is QFlags:
+
+  enum class Right : uint8_t
+  {
+      AddUsers     = 1u << 0,   // updates the group activity time
+      RemoveUsers  = 1u << 1,   // updates the group activity time
+      ScheduleGame = 1u << 2,   // updates the group activity time
+      JoinGame     = 1u << 3,   // can be used to ban people who have not paid, while keeping them in the group
+      // bits 4-7 reserved, must be 0
+  };
+  Q_DECLARE_FLAGS(MemberRights, Right)
+  Q_DECLARE_OPERATORS_FOR_FLAGS(MemberRights)
+
+  Using it:
+
+  member.rights = Right::AddUsers | Right::RemoveUsers | Right::JoinGame | Right::ScheduleGame;
+  if (member.rights.testFlag(Right::JoinGame)) { ... }
+  member.rights.setFlag(Right::JoinGame, false);   // ban
+
+  ds << quint8(member.rights.toInt());             // for signing / the wire: same byte on every target
+
+  The bit positions are written in the source, so the byte is the same on every compiler and CPU, and there's no padding or undefined behaviour. This
+  also replaces the packRights() helper from earlier.
+*/
+
+
 
 struct GroupMember
 {
@@ -50,12 +79,24 @@ struct GroupMember
     MemberRights rights;
 };
 
+//adding a member to the group:
+//take the group datastream with the most recent version
+//unpack the datastream into a group object
+//edit it there
+//pack it into a datasteam and sign it.
+
+struct GroupPacked
+{
+    QByteArray groupPacked;
+    Signature sigGroup; //add he userid that has signed the message, so we only need to check one public key instead of all
+};
+
+
 struct Group
 {
     QList<GroupMember> members;
-    QDateTime expireDateTime;
+    qint64 expireSecsSinceEpoch; //change into qint64 seconds since epoch via  DateTime.toUTC().toSecsSinceEpoch())
     uint32_t  version;
-    Signature sigGroup;
 };
 
 struct MemberNickNameAndId
@@ -107,6 +148,8 @@ private:
 
     MemberPrivate* myMembersPrivate[MAX_MEMBERS];
     void updatePlayingStatus(PrivateKey privatekey, PublicKey publickey, bool playing);
+    void packGroup(Group* group, GroupPacked* grouppacked);
+    void unpackGroup(Group* group, GroupPacked* grouppacked);
 };
 
 /*

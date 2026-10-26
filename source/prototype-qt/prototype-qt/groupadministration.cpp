@@ -107,9 +107,10 @@ void GroupAdministration::slotCreateGroup(bool clicked)
     member.rights.canScheduleGame = true;
     group.members.append(member);
     QDateTime now = QDateTime::currentDateTime();
-    group.expireDateTime = now.addYears(1); //nope, this can mean expiredatetime lands in the past if the local time is off far enough.
+    group.expireSecsSinceEpoch = now.addYears(1).toUTC().toSecsSinceEpoch();
     group.version += 1;
-    group.sigGroup.signature = 1122334455; //replace by a call to a real signature maker, using the private key of userId 1
+    //pack it, then sign it.
+//    group.sigGroup.signature = 1122334455; //replace by a call to a real signature maker, using the private key of userId 1
 
     myGroups.append(group); //this is not good, this implies all groups have no encryption or all the same encryption key.
 }
